@@ -4,7 +4,7 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Platform: Ubuntu](https://img.shields.io/badge/Platform-Ubuntu%2020.04%2B-orange.svg)](https://ubuntu.com)
 [![Python: 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
-[![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-brightgreen.svg)](https://github.com/violet-dj/violet-dj-mixer)
+[![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-brightgreen.svg)](https://github.com/violet-dj/violet-dj-mixer)
 
 <div align="center">
 
@@ -99,8 +99,8 @@ Professional audio effects:
 
 ```bash
 # Download and install the .deb package
-wget https://github.com/violet-dj/violet-dj-mixer/releases/download/v1.0.0/violet-dj-mixer_1.0.0_amd64.deb
-sudo apt install ./violet-dj-mixer_1.0.0_amd64.deb
+wget https://github.com/violet-dj/violet-dj-mixer/releases/download/v2.0.0/violet-dj-mixer_2.0.0_amd64.deb
+sudo apt install ./violet-dj-mixer_2.0.0_amd64.deb
 ```
 
 **Or install from source:**
@@ -347,7 +347,7 @@ class MyEffect(AudioEffect):
 
 ### Distribution Files
 
-- `violet-dj-mixer_1.0.0_amd64.deb` - Ubuntu 64-bit package
+- `violet-dj-mixer_2.0.0_amd64.deb` - Ubuntu 64-bit package
 - Includes all dependencies and drivers
 - Desktop integration & menu shortcuts
 

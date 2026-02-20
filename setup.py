@@ -17,7 +17,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="violet-dj-mixer",
-    version="1.0.0",
+    version="2.0.0",
     author="Violet DJ Community",
     author_email="support@violet-dj.github.io",
     description="Professional Digital DJ Mixing Board for Ubuntu",

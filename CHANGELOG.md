@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-02-20
+
+### Added - Major Enhancement Release
+
+#### UI Improvements
+- Pioneer DJM-800 hardware-inspired professional interface
+- Enhanced visual design with professional styling
+- Improved control layouts and responsiveness
+- Better visual feedback for all controls
+
+#### Performance
+- Optimized rendering and performance
+- Improved event handling
+- Better memory management
+
+#### Compatibility
+- Resolved PyQt6 multimedia dependency issues
+- Improved compatibility across Ubuntu versions
+- Better snap environment handling
+
 ## [1.0.0] - 2024-02-20
 
 ### Added - Initial Release
