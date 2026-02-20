@@ -85,8 +85,8 @@ set -e
 mkdir -p /root/.violet_dj
 mkdir -p /root/.config/violet-dj
 
-# Install Python dependencies
-pip3 install --system pyqt6 pyaudio librosa soundfile numpy scipy python-rtmidi mido pyusb pybluez alsaaudio pyqtgraph pyyaml
+# Note: All Python dependencies are installed via apt (pyqt6, pyaudio, etc.)
+# No additional pip installation needed
 
 # Create symlink for easy launching
 ln -sf /opt/violet-dj/main.py /usr/local/bin/violet-dj-mixer

@@ -1,493 +1,565 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Violet DJ Mixer - Professional Digital Mixing Board</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
-            color: #e0e0e0;
-            line-height: 1.6;
-        }
-        
-        header {
-            background: linear-gradient(90deg, #7c3aed 0%, #2e1065 100%);
-            color: white;
-            padding: 60px 20px;
-            text-align: center;
-            border-bottom: 3px solid #7c3aed;
-        }
-        
-        header h1 {
-            font-size: 3.5em;
-            margin-bottom: 10px;
-            text-shadow: 0 2px 10px rgba(124, 58, 237, 0.3);
-        }
-        
-        header p {
-            font-size: 1.3em;
-            color: #c4b5fd;
-        }
-        
-        nav {
-            background: #1a1a2e;
-            padding: 15px 0;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            border-bottom: 2px solid #7c3aed;
-        }
-        
-        nav ul {
-            list-style: none;
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        
-        nav li {
-            margin: 0 20px;
-        }
-        
-        nav a {
-            color: #e0e0e0;
-            text-decoration: none;
-            font-weight: bold;
-            transition: color 0.3s;
-        }
-        
-        nav a:hover {
-            color: #7c3aed;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-        
-        section {
-            margin-bottom: 60px;
-        }
-        
-        h2 {
-            color: #7c3aed;
-            font-size: 2.5em;
-            margin-bottom: 30px;
-            border-bottom: 3px solid #7c3aed;
-            padding-bottom: 15px;
-        }
-        
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 30px;
-            margin: 30px 0;
-        }
-        
-        .feature-card {
-            background: #1e1e2e;
-            border-left: 4px solid #7c3aed;
-            padding: 25px;
-            border-radius: 8px;
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-        
-        .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(124, 58, 237, 0.2);
-        }
-        
-        .feature-card h3 {
-            color: #7c3aed;
-            margin-bottom: 10px;
-        }
-        
-        .cta-button {
-            display: inline-block;
-            background: linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%);
-            color: white;
-            padding: 15px 40px;
-            border-radius: 50px;
-            text-decoration: none;
-            font-weight: bold;
-            margin: 10px 10px 10px 0;
-            transition: transform 0.3s, box-shadow 0.3s;
-            border: none;
-            cursor: pointer;
-            font-size: 1.1em;
-        }
-        
-        .cta-button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 20px rgba(124, 58, 237, 0.4);
-        }
-        
-        .download-section {
-            background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
-            padding: 40px;
-            border-radius: 8px;
-            border-left: 4px solid #7c3aed;
-        }
-        
-        .system-requirements {
-            background: #1e1e2e;
-            padding: 25px;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-        
-        .system-requirements ul {
-            list-style: none;
-            padding-left: 20px;
-        }
-        
-        .system-requirements li {
-            margin: 10px 0;
-            padding-left: 25px;
-            position: relative;
-        }
-        
-        .system-requirements li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #7c3aed;
-            font-weight: bold;
-        }
-        
-        .highlight {
-            color: #7c3aed;
-            font-weight: bold;
-        }
-        
-        footer {
-            background: #0f0f1e;
-            color: #999;
-            text-align: center;
-            padding: 30px 20px;
-            border-top: 2px solid #7c3aed;
-            margin-top: 60px;
-        }
-        
-        .badges {
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin: 20px 0;
-        }
-        
-        .badge {
-            background: #1e1e2e;
-            border: 2px solid #7c3aed;
-            color: #7c3aed;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: bold;
-        }
-        
-        .code-block {
-            background: #0f0f1e;
-            border-left: 4px solid #7c3aed;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
-            overflow-x: auto;
-            font-family: 'Courier New', monospace;
-            color: #a0d468;
-        }
-        
-        @media (max-width: 768px) {
-            header h1 {
-                font-size: 2em;
-            }
-            
-            .feature-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            nav ul {
-                flex-direction: column;
-            }
-            
-            nav li {
-                margin: 10px 0;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Violet DJ Mixer — Professional Digital Mixing Board</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg:       #0e0e0e; --panel: #1a1a1a; --card: #202020;
+      --border:   #2e2e2e; --border-hi: #3a3a3a;
+      --amber:    #ff8800; --amber-dim: #cc5500; --amber-lo: #7a3800;
+      --green:    #00aa44; --blue: #4488ff;
+      --text:     #cccccc; --muted: #777777; --faint: #444444; --white: #f0f0f0;
+    }
+    html { scroll-behavior:smooth; }
+    body { font-family:"Inter","Segoe UI","Ubuntu",system-ui,sans-serif;
+      background:var(--bg); color:var(--text); line-height:1.6; font-size:15px; }
+    a { color:var(--amber); text-decoration:none; }
+    a:hover { color:#ffaa33; }
+    .container { max-width:1200px; margin:0 auto; padding:0 24px; }
+
+    /* ── Nav ── */
+    nav { position:sticky; top:0; z-index:100;
+      background:rgba(10,10,10,0.96); border-bottom:1px solid var(--border);
+      backdrop-filter:blur(12px); }
+    .nav-inner { display:flex; align-items:center; justify-content:space-between;
+      padding:14px 24px; max-width:1200px; margin:0 auto; }
+    .nav-logo { display:flex; align-items:center; gap:12px; }
+    .nav-logo .dot { width:12px; height:12px; border-radius:50%; background:var(--amber);
+      box-shadow:0 0 8px var(--amber); }
+    .nav-logo span { font-size:18px; font-weight:700; color:var(--white); letter-spacing:1px; }
+    .nav-logo small { font-size:11px; color:var(--muted); font-weight:400;
+      letter-spacing:2px; text-transform:uppercase; }
+    .nav-links { display:flex; gap:28px; list-style:none; }
+    .nav-links a { color:var(--muted); font-size:13px; font-weight:600;
+      letter-spacing:.5px; transition:color .2s; }
+    .nav-links a:hover { color:var(--amber); }
+
+    /* ── Hero ── */
+    .hero { padding:100px 0 80px; text-align:center;
+      background:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(255,136,0,.06) 0%,transparent 70%);
+      border-bottom:1px solid var(--border); }
+    .hero-badge { display:inline-flex; align-items:center; gap:8px;
+      background:var(--card); border:1px solid var(--amber-lo); border-radius:40px;
+      padding:6px 18px; margin-bottom:32px; font-size:12px; font-weight:700;
+      color:var(--amber); letter-spacing:1.5px; text-transform:uppercase; }
+    .hero-badge .led { width:8px; height:8px; border-radius:50%; background:var(--amber);
+      box-shadow:0 0 6px var(--amber); }
+    .hero h1 { font-size:clamp(2.8rem,6vw,5rem); font-weight:800; color:var(--white);
+      line-height:1.1; letter-spacing:-1px; margin-bottom:20px; }
+    .hero h1 span { color:var(--amber); }
+    .hero p { font-size:1.15rem; color:var(--muted); max-width:580px;
+      margin:0 auto 44px; line-height:1.7; }
+    .hero-cta { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+
+    /* ── Buttons ── */
+    .btn { display:inline-flex; align-items:center; gap:10px;
+      padding:14px 30px; border-radius:6px; font-size:14px;
+      font-weight:700; letter-spacing:.5px; cursor:pointer;
+      border:none; transition:all .18s; text-decoration:none; }
+    .btn-amber { background:linear-gradient(180deg,var(--amber) 0%,var(--amber-dim) 100%);
+      color:#fff; border:1px solid #ffaa22; box-shadow:0 4px 20px rgba(255,136,0,.25); }
+    .btn-amber:hover { background:linear-gradient(180deg,#ffaa22 0%,var(--amber) 100%);
+      color:#fff; box-shadow:0 6px 28px rgba(255,136,0,.38); transform:translateY(-1px); }
+    .btn-outline { background:transparent; color:var(--text); border:1px solid var(--border-hi); }
+    .btn-outline:hover { border-color:var(--amber); color:var(--amber); transform:translateY(-1px); }
+
+    /* ── Section ── */
+    .section { padding:80px 0; border-bottom:1px solid var(--border); }
+    .section-header { text-align:center; margin-bottom:56px; }
+    .section-badge { display:inline-block; background:var(--card);
+      border:1px solid var(--border-hi); border-radius:20px; padding:4px 16px;
+      margin-bottom:16px; font-size:11px; font-weight:700; color:var(--muted);
+      letter-spacing:2px; text-transform:uppercase; }
+    .section-header h2 { font-size:2.4rem; font-weight:800; color:var(--white);
+      letter-spacing:-.5px; margin-bottom:14px; }
+    .section-header p { color:var(--muted); max-width:560px; margin:0 auto; }
+
+    /* ── Mixer mockup ── */
+    .mixer-preview { padding:80px 0; border-bottom:1px solid var(--border); }
+    .mixer-mockup { background:#141414; border:1px solid #303030;
+      border-top:2px solid #3a3a3a; border-radius:12px; padding:28px 24px 20px;
+      display:flex; gap:10px; align-items:stretch; max-width:980px;
+      margin:48px auto 0;
+      box-shadow:0 24px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,136,0,.06); }
+    .mixer-side { background:#1c1c1c; border:1px solid #2c2c2c; border-radius:8px;
+      padding:14px 12px; display:flex; flex-direction:column;
+      gap:10px; align-items:center; }
+    .mixer-side-label { font-size:8px; font-weight:700; color:#555;
+      letter-spacing:2px; text-transform:uppercase; }
+    .knob { width:40px; height:40px; border-radius:50%;
+      background:radial-gradient(circle at 35% 35%,#3a3a3a,#111);
+      border:2px solid #2a2a2a; position:relative; }
+    .knob::after { content:''; position:absolute; top:4px; left:50%;
+      transform:translateX(-50%); width:3px; height:10px;
+      background:#ff8800; border-radius:2px; }
+    .knob.sm { width:30px; height:30px; }
+    .knob.sm::after { height:7px; top:3px; }
+    .channel-strip { background:linear-gradient(180deg,#222 0%,#1a1a1a 100%);
+      border:1px solid #303030; border-top:2px solid #3c3c3c; border-radius:8px;
+      padding:14px 10px; flex:1; display:flex; flex-direction:column;
+      align-items:center; gap:8px; min-width:0; }
+    .ch-selector { background:#111; border:1px solid #2a2a2a; border-radius:3px;
+      color:#555; font-size:8px; font-weight:700; letter-spacing:1px;
+      padding:3px 6px; width:100%; text-align:center; }
+    .ch-num { color:var(--amber); font-size:14px; font-weight:800; }
+    .eq-stack { display:flex; flex-direction:column; gap:6px; align-items:center; }
+    .meter-strip { width:8px; height:80px; background:#0a0a0a;
+      border:1px solid #1e1e1e; border-radius:2px; overflow:hidden; position:relative; }
+    .meter-fill { position:absolute; bottom:0; left:0; right:0;
+      background:linear-gradient(0deg,#00aa44 0%,#00aa44 55%,#ffaa00 72%,#ff4400 86%,#ff0000 100%); }
+    .cue-btn { width:100%;
+      background:linear-gradient(180deg,#7a3a00,#4a2200);
+      border:1px solid #5a3000; border-top-color:#8a4400; border-radius:4px;
+      padding:7px 4px; color:#cc7700; font-size:10px; font-weight:800;
+      letter-spacing:2px; text-align:center; }
+    .fader-track { width:6px; height:80px; background:#060606;
+      border:1px solid #1a1a1a; border-radius:3px; position:relative; margin:0 auto; }
+    .fader-handle { position:absolute; left:50%; transform:translateX(-50%);
+      width:30px; height:13px; border-radius:3px;
+      background:linear-gradient(90deg,#1e1e1e 0%,#666 20%,#ccc 50%,#666 80%,#1e1e1e 100%);
+      border:1px solid #999; }
+    .crossfader-bar { background:#161616; border:1px solid #2a2a2a; border-radius:6px;
+      padding:14px 24px; display:flex; align-items:center; gap:14px;
+      margin-top:10px; max-width:980px; margin-left:auto; margin-right:auto; }
+    .cf-label { color:var(--amber); font-size:13px; font-weight:800; }
+    .cf-track { flex:1; height:10px; background:#060606;
+      border:1px solid #1c1c1c; border-radius:5px; position:relative; }
+    .cf-handle { position:absolute; top:50%; left:50%;
+      transform:translate(-50%,-50%); width:28px; height:28px;
+      background:linear-gradient(180deg,#999 0%,#ddd 35%,#ddd 65%,#555 100%);
+      border:2px solid #888; border-radius:4px; }
+
+    /* ── Feature grid ── */
+    .feature-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:16px; }
+    .feature-card { background:var(--card); border:1px solid var(--border);
+      border-radius:10px; padding:28px; transition:border-color .2s,transform .2s; }
+    .feature-card:hover { border-color:var(--amber-lo); transform:translateY(-3px); }
+    .feature-icon { font-size:26px; margin-bottom:14px; display:block; }
+    .feature-card h3 { color:var(--white); font-size:1rem; font-weight:700; margin-bottom:8px; }
+    .feature-card p { color:var(--muted); font-size:13.5px; line-height:1.6; }
+
+    /* ── Pad ── */
+    .pad-showcase { background:#141414; border:1px solid #2a2a2a; border-radius:12px;
+      padding:24px; display:inline-block; box-shadow:0 16px 50px rgba(0,0,0,.6); }
+    .pad-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+    .pad { width:70px; height:70px; border-radius:7px; border:2px solid rgba(0,0,0,.5);
+      cursor:pointer; transition:filter .1s; }
+    .pad:hover { filter:brightness(1.3); }
+
+    /* ── Download ── */
+    .download-section { background:radial-gradient(ellipse 80% 60% at 50% 100%,
+      rgba(255,136,0,.06) 0%,transparent 70%); padding:90px 0; }
+    .download-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+      gap:20px; margin-top:48px; }
+    .download-card { background:var(--card); border:1px solid var(--border);
+      border-radius:12px; padding:32px; transition:border-color .2s; }
+    .download-card:hover { border-color:var(--amber-lo); }
+    .download-card h3 { color:var(--white); font-size:1.1rem; font-weight:700; margin-bottom:8px; }
+    .download-card p { color:var(--muted); font-size:13.5px; margin-bottom:22px; }
+    .code-block { background:#0d0d0d; border:1px solid var(--border);
+      border-left:3px solid var(--amber); border-radius:6px; padding:16px 20px;
+      font-family:"Courier New","Fira Code",monospace; font-size:13px; color:#88dd66;
+      overflow-x:auto; margin:16px 0; white-space:pre; }
+
+    /* ── Specs ── */
+    .spec-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      gap:12px; margin-top:40px; }
+    .spec-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:22px; }
+    .spec-card h4 { color:var(--amber); font-size:11px; font-weight:700;
+      letter-spacing:2px; text-transform:uppercase; margin-bottom:10px; }
+    .spec-card ul { list-style:none; }
+    .spec-card li { color:var(--muted); font-size:13px; padding:4px 0;
+      border-bottom:1px solid var(--border); }
+    .spec-card li:last-child { border-bottom:none; }
+    .spec-card li::before { content:"·  "; color:var(--amber); }
+
+    /* ── Stats ── */
+    .stats-row { display:flex; justify-content:center; gap:60px; flex-wrap:wrap;
+      margin:56px 0; padding:40px; background:var(--card);
+      border:1px solid var(--border); border-radius:12px; }
+    .stat { text-align:center; }
+    .stat-value { font-size:2.8rem; font-weight:800; color:var(--amber);
+      display:block; line-height:1; }
+    .stat-label { font-size:12px; color:var(--muted); letter-spacing:1px; margin-top:6px; }
+
+    /* ── HW tags ── */
+    .hw-list { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:32px; }
+    .hw-tag { background:var(--card); border:1px solid var(--border); border-radius:40px;
+      padding:7px 18px; font-size:12.5px; font-weight:600; color:var(--muted);
+      transition:border-color .2s,color .2s; }
+    .hw-tag:hover { border-color:var(--amber); color:var(--amber); }
+
+    /* ── Community ── */
+    .community-links { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-top:36px; }
+
+    /* ── Footer ── */
+    footer { background:#0a0a0a; border-top:1px solid var(--border); padding:40px 24px; text-align:center; }
+    .footer-logo { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:20px; }
+    .footer-logo .dot { width:10px; height:10px; border-radius:50%;
+      background:var(--amber); box-shadow:0 0 6px var(--amber); }
+    .footer-logo span { color:var(--white); font-weight:700; font-size:16px; }
+    footer p { color:var(--faint); font-size:13px; margin-top:8px; }
+    .footer-links { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; margin:16px 0; }
+    .footer-links a { color:var(--muted); }
+    .footer-links a:hover { color:var(--amber); }
+
+    @media (max-width:768px) {
+      .hero h1 { font-size:2.2rem; }
+      .nav-links { display:none; }
+      .mixer-mockup { flex-wrap:wrap; }
+      .stats-row { gap:30px; }
+      .pad { width:52px; height:52px; }
+    }
+  </style>
 </head>
 <body>
-    <header>
-        <h1>🎛️ Violet DJ Mixer</h1>
-        <p>Professional Digital Mixing Board for Ubuntu</p>
-        <p><span class="highlight">Free & Open Source</span> • GPL-3.0 License</p>
-    </header>
-    
-    <nav>
-        <ul>
-            <li><a href="#features">Features</a></li>
-            <li><a href="#download">Download</a></li>
-            <li><a href="#hardware">Hardware</a></li>
-            <li><a href="#docs">Documentation</a></li>
-            <li><a href="#community">Community</a></li>
-        </ul>
-    </nav>
-    
-    <div class="container">
-        <section id="intro">
-            <h2>🎵 Professional DJ Software for Everyone</h2>
-            <p>
-                Violet DJ Mixer is a <span class="highlight">completely free</span>, open-source digital mixing board 
-                designed for DJs, producers, and musicians who can't afford expensive professional software. 
-                Built to rival industry-leading mixers while remaining accessible to all.
-            </p>
-            <div class="badges">
-                <span class="badge">Ubuntu 20.04+</span>
-                <span class="badge">Python 3.8+</span>
-                <span class="badge">GPL-3.0 License</span>
-                <span class="badge">64-bit</span>
-                <span class="badge">Open Source</span>
-            </div>
-        </section>
-        
-        <section id="features">
-            <h2>✨ Powerful Features</h2>
-            <div class="feature-grid">
-                <div class="feature-card">
-                    <h3>🎚️ Professional Mixing Board</h3>
-                    <p>Dual turntable decks with independent EQ, faders, crossfader, and master output metering</p>
-                </div>
-                <div class="feature-card">
-                    <h3>🎧 Hardware Compatible</h3>
-                    <p>Support for 100+ DJ controllers: Pioneer DDJ, Numark, Reloop, Traktor, and more</p>
-                </div>
-                <div class="feature-card">
-                    <h3>🎵 All Audio Formats</h3>
-                    <p>MP3, WAV, FLAC, OGG, AAC, M4A, ALAC, AIFF, WMA - all supported</p>
-                </div>
-                <div class="feature-card">
-                    <h3>📡 Wireless Connectivity</h3>
-                    <p>USB, Bluetooth, and Wi-Fi device support with auto-detection</p>
-                </div>
-                <div class="feature-card">
-                    <h3>🎨 Real-time Visualization</h3>
-                    <p>Waveform display, spectrum analyzer, and audio meters</p>
-                </div>
-                <div class="feature-card">
-                    <h3>🎛️ Audio Effects</h3>
-                    <p>Echo, Reverb, Chorus, Flanger, Phaser, Distortion, Delay, and more</p>
-                </div>
-                <div class="feature-card">
-                    <h3>🔧 Fully Customizable</h3>
-                    <p>Complete MIDI mapping, plugin system, and RESTful API</p>
-                </div>
-                <div class="feature-card">
-                    <h3>📚 Comprehensive Docs</h3>
-                    <p>Complete user manual, hardware guides, and troubleshooting</p>
-                </div>
-                <div class="feature-card">
-                    <h3>🚀 High Performance</h3>
-                    <p>Zero-latency mixing with support for multiple simultaneous devices</p>
-                </div>
-            </div>
-        </section>
-        
-        <section id="download">
-            <h2>⬇️ Download & Install</h2>
-            
-            <div class="download-section">
-                <h3 style="color: #7c3aed; margin-bottom: 20px;">Ubuntu Package (Recommended)</h3>
-                <p style="margin-bottom: 20px;">
-                    The easiest way to install Violet DJ Mixer on Ubuntu 20.04 LTS or later:
-                </p>
-                <a href="https://github.com/violet-dj/violet-dj-mixer/releases/download/v1.0.0/violet-dj-mixer_1.0.0_amd64.deb" class="cta-button">
-                    📦 Download .deb Package (v1.0.0)
-                </a>
-                <p style="margin-top: 20px; color: #999;">
-                    Size: ~45 MB | SHA256: <code>auto-generated on release</code>
-                </p>
-            </div>
-            
-            <div class="system-requirements">
-                <h3 style="color: #7c3aed;">System Requirements</h3>
-                <ul>
-                    <li><strong>OS:</strong> Ubuntu 20.04 LTS or later</li>
-                    <li><strong>Processor:</strong> Intel i5 / AMD Ryzen 5 (2.5 GHz+)</li>
-                    <li><strong>RAM:</strong> 4 GB minimum (8 GB recommended)</li>
-                    <li><strong>Storage:</strong> 500 MB free space</li>
-                    <li><strong>Audio:</strong> Built-in or USB audio device</li>
-                </ul>
-            </div>
-            
-            <h3 style="color: #7c3aed; margin-top: 30px;">Installation Instructions</h3>
-            <div class="code-block">
-# Download and install
-wget https://github.com/violet-dj/violet-dj-mixer/releases/download/v1.0.0/violet-dj-mixer_1.0.0_amd64.deb
-sudo apt install ./violet-dj-mixer_1.0.0_amd64.deb
 
-# Launch application
-violet-dj
-            </div>
-            
-            <h3 style="color: #7c3aed; margin-top: 30px;">Build from Source</h3>
-            <div class="code-block">
-git clone https://github.com/violet-dj/violet-dj-mixer.git
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <div class="nav-logo">
+      <div class="dot"></div>
+      <div><span>Violet DJ</span><br><small>v1.1.0 · Free &amp; Open Source</small></div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#mixer">Mixer</a></li>
+      <li><a href="#sampler">Sampler</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#hardware">Hardware</a></li>
+      <li><a href="#download">Download</a></li>
+      <li><a href="#specs">Specs</a></li>
+    </ul>
+    <a href="#download" class="btn btn-amber" style="padding:10px 22px;font-size:13px;">⬇ Download v1.1.0</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge"><div class="led"></div>Version 1.1.0 · Pioneer DJM-800 + DJS-1000 Interface</div>
+    <h1>Professional<br><span>Digital DJ Mixer</span><br>for Ubuntu</h1>
+    <p>Industry-grade DJ mixing software inspired by the Pioneer DJM-800 and DJS-1000. Four-channel mixing board with 4×4 performance pads, effects rack, and full hardware controller support. Free. Forever.</p>
+    <div class="hero-cta">
+      <a href="https://github.com/violet-dj/violet-dj-mixer/releases/download/v1.1.0/violet-dj-mixer_1.1.0_amd64.deb" class="btn btn-amber">📦 Download .deb (Ubuntu 20.04+)</a>
+      <a href="https://github.com/violet-dj/violet-dj-mixer" class="btn btn-outline">🐙 View Source</a>
+    </div>
+  </div>
+</section>
+
+<!-- MIXER PREVIEW -->
+<section class="mixer-preview" id="mixer">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-badge">DJM-800 Inspired</div>
+      <h2>4-Channel Mixing Board</h2>
+      <p>Professional 4-channel mixer with TRIM, 3-band EQ, level meters, COLOR knob, CUE sends, and chrome channel faders.</p>
+    </div>
+    <div class="mixer-mockup">
+      <!-- Left mic panel -->
+      <div class="mixer-side" style="min-width:80px;">
+        <div class="mixer-side-label">MIC</div>
+        <div class="knob sm"></div><div class="knob sm"></div>
+        <hr style="width:100%;border-color:#2a2a2a;margin:4px 0;">
+        <div class="mixer-side-label">PHONES</div>
+        <div class="knob sm"></div><div class="knob sm"></div>
+        <hr style="width:100%;border-color:#2a2a2a;margin:4px 0;">
+        <div class="mixer-side-label">COLOR FX</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+          <div style="background:#001540;color:#4488bb;border:1px solid #003060;border-radius:3px;padding:4px 2px;font-size:8px;font-weight:700;text-align:center;">HARM</div>
+          <div style="background:#001540;color:#4488bb;border:1px solid #003060;border-radius:3px;padding:4px 2px;font-size:8px;font-weight:700;text-align:center;">SWEEP</div>
+          <div style="background:#001540;color:#4488bb;border:1px solid #003060;border-radius:3px;padding:4px 2px;font-size:8px;font-weight:700;text-align:center;">CRUSH</div>
+          <div style="background:#001540;color:#4488bb;border:1px solid #003060;border-radius:3px;padding:4px 2px;font-size:8px;font-weight:700;text-align:center;">FILT</div>
+        </div>
+      </div>
+      <!-- CH 1 -->
+      <div class="channel-strip">
+        <div class="ch-selector">CD/LINE</div><div class="ch-num">1</div>
+        <div class="knob sm"></div><div style="font-size:8px;color:#444;letter-spacing:1px;">TRIM</div>
+        <div class="eq-stack">
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">HI</div>
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">MID</div>
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">LOW</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <div class="meter-strip"><div class="meter-fill" style="height:55%;"></div></div>
+          <div style="text-align:center;"><div class="knob sm"></div><div style="font-size:8px;color:#444;">COLOR</div></div>
+        </div>
+        <div class="cue-btn">CUE</div>
+        <div class="fader-track"><div class="fader-handle" style="bottom:55%;"></div></div>
+      </div>
+      <!-- CH 2 (CUE lit) -->
+      <div class="channel-strip">
+        <div class="ch-selector">CD/LINE</div><div class="ch-num">2</div>
+        <div class="knob sm"></div><div style="font-size:8px;color:#444;letter-spacing:1px;">TRIM</div>
+        <div class="eq-stack">
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">HI</div>
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">MID</div>
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">LOW</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <div class="meter-strip"><div class="meter-fill" style="height:72%;"></div></div>
+          <div style="text-align:center;"><div class="knob sm"></div><div style="font-size:8px;color:#444;">COLOR</div></div>
+        </div>
+        <div class="cue-btn" style="background:linear-gradient(180deg,#ff9900,#cc5500);color:#fff;border-color:#ffaa22;">CUE ●</div>
+        <div class="fader-track"><div class="fader-handle" style="bottom:70%;"></div></div>
+      </div>
+      <!-- CH 3 -->
+      <div class="channel-strip">
+        <div class="ch-selector">LINE</div><div class="ch-num">3</div>
+        <div class="knob sm"></div><div style="font-size:8px;color:#444;letter-spacing:1px;">TRIM</div>
+        <div class="eq-stack">
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">HI</div>
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">MID</div>
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">LOW</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <div class="meter-strip"><div class="meter-fill" style="height:30%;"></div></div>
+          <div style="text-align:center;"><div class="knob sm"></div><div style="font-size:8px;color:#444;">COLOR</div></div>
+        </div>
+        <div class="cue-btn">CUE</div>
+        <div class="fader-track"><div class="fader-handle" style="bottom:40%;"></div></div>
+      </div>
+      <!-- CH 4 -->
+      <div class="channel-strip">
+        <div class="ch-selector">PHONO</div><div class="ch-num">4</div>
+        <div class="knob sm"></div><div style="font-size:8px;color:#444;letter-spacing:1px;">TRIM</div>
+        <div class="eq-stack">
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">HI</div>
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">MID</div>
+          <div class="knob sm"></div><div style="font-size:8px;color:#444;">LOW</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <div class="meter-strip"><div class="meter-fill" style="height:45%;"></div></div>
+          <div style="text-align:center;"><div class="knob sm"></div><div style="font-size:8px;color:#444;">COLOR</div></div>
+        </div>
+        <div class="cue-btn">CUE</div>
+        <div class="fader-track"><div class="fader-handle" style="bottom:50%;"></div></div>
+      </div>
+      <!-- Right FX/Master panel -->
+      <div class="mixer-side" style="min-width:100px;">
+        <div class="mixer-side-label">Effect</div>
+        <div style="background:#00070f;border:1px solid #0a2030;border-radius:3px;padding:5px 8px;color:#55aaff;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:2px;text-align:center;">FLANGER</div>
+        <div style="background:#00070f;border:1px solid #0a2030;border-radius:3px;padding:4px 6px;color:#ffffff;font-size:14px;font-weight:700;font-family:monospace;text-align:center;margin-top:4px;">120</div>
+        <div style="background:#00070f;border:1px solid #0a2030;border-radius:3px;padding:3px 6px;color:#aaaaff;font-size:10px;font-family:monospace;text-align:center;">2000ms</div>
+        <div style="display:flex;gap:4px;justify-content:center;margin-top:4px;">
+          <div style="background:#006620;border:2px solid #00cc44;border-radius:20px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;">TAP</div>
+          <div style="background:#7a3800;border:1px solid #5a3000;border-radius:20px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:#cc7700;font-size:9px;font-weight:700;">CUE</div>
+        </div>
+        <hr style="width:100%;border-color:#2a2a2a;margin:6px 0;">
+        <div class="mixer-side-label">Master</div>
+        <div class="fader-track" style="height:60px;margin:0 auto;"><div class="fader-handle" style="bottom:70%;width:34px;"></div></div>
+        <div class="knob sm"></div>
+        <div style="font-size:8px;color:#444;">BALANCE</div>
+        <div style="background:linear-gradient(180deg,#ff8800,#cc5500);border:2px solid #ffaa22;border-radius:20px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;line-height:1.2;text-align:center;margin-top:6px;">ON<br>OFF</div>
+      </div>
+    </div>
+    <!-- Crossfader -->
+    <div class="crossfader-bar">
+      <span class="cf-label">《 A</span>
+      <div class="cf-track"><div class="cf-handle"></div></div>
+      <span class="cf-label">B 》</span>
+      <span style="color:#555;font-size:11px;letter-spacing:1px;margin-left:16px;">CURVE  ⌒ — ⌓</span>
+    </div>
+  </div>
+</section>
+
+<!-- SAMPLER -->
+<section class="section" id="sampler">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-badge">DJS-1000 Inspired</div>
+      <h2>Performance Sampler</h2>
+      <p>16-pad RGB performance grid with hot cues, beat sync, tempo fader, and per-pad color coding.</p>
+    </div>
+    <div style="text-align:center;">
+      <div class="pad-showcase">
+        <div class="pad-grid">
+          <div class="pad" style="background:linear-gradient(180deg,#dd30ff,#aa10cc);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#ff30c0,#cc1090);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#ff50a0,#cc2070);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#ff3090,#cc1060);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#30a0ff,#1060cc);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#3060ff,#1030cc);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#7030ff,#4010cc);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#9055ff,#6020cc);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#88ee50,#50aa20);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#50cc30,#308810);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#30cc80,#108850);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#50ee90,#28aa55);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#ff5020,#cc2a10);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#ff8020,#cc5010);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#ffaa30,#cc7a10);"></div>
+          <div class="pad" style="background:linear-gradient(180deg,#ffcc40,#cc9a20);"></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:10px;justify-content:center;">
+          <div style="width:42px;height:30px;border-radius:5px;background:linear-gradient(180deg,#50cc30,#308810);border:2px solid rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:10px;font-weight:700;">1</div>
+          <div style="width:42px;height:30px;border-radius:5px;background:linear-gradient(180deg,#30cc80,#108850);border:2px solid rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:10px;font-weight:700;">2</div>
+          <div style="width:42px;height:30px;border-radius:5px;background:linear-gradient(180deg,#30a0ff,#1060cc);border:2px solid rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:10px;font-weight:700;">3</div>
+          <div style="width:42px;height:30px;border-radius:5px;background:linear-gradient(180deg,#3060ff,#1030cc);border:2px solid rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:10px;font-weight:700;">4</div>
+          <div style="width:42px;height:30px;border-radius:5px;background:linear-gradient(180deg,#ffaa30,#cc7a10);border:2px solid rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:10px;font-weight:700;">5</div>
+          <div style="width:42px;height:30px;border-radius:5px;background:linear-gradient(180deg,#ff8020,#cc5010);border:2px solid rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:10px;font-weight:700;">6</div>
+          <div style="width:42px;height:30px;border-radius:5px;background:linear-gradient(180deg,#ff50a0,#cc2070);border:2px solid rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:10px;font-weight:700;">7</div>
+          <div style="width:42px;height:30px;border-radius:5px;background:linear-gradient(180deg,#7030ff,#4010cc);border:2px solid rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:10px;font-weight:700;">8</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-badge">Capabilities</div>
+      <h2>Everything You Need</h2>
+      <p>Built to rival professional software at no cost, with the ergonomics of real hardware.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card"><span class="feature-icon">🎚️</span><h3>4-Channel Mixing Board</h3><p>Full-featured 4-channel mixer with TRIM, 3-band parametric EQ, level meters, COLOR knob, and CUE send per channel.</p></div>
+      <div class="feature-card"><span class="feature-icon">🥁</span><h3>Performance Sampler</h3><p>16-pad RGB grid with beat-sync, hot cues, loop slice, pitch repeat, and tempo nudge — DJS-1000 style.</p></div>
+      <div class="feature-card"><span class="feature-icon">🎛️</span><h3>Sound Color FX</h3><p>HARMONIC, SWEEP, CRUSH, FILTER effects plus 7 beat effects: Echo, Reverb, Chorus, Flanger, Phaser, Distortion, Delay.</p></div>
+      <div class="feature-card"><span class="feature-icon">🎧</span><h3>100+ Controllers</h3><p>Pioneer DDJ / CDJ / DJM, Numark, Reloop, Traktor, Denon DJ, Rane, Allen &amp; Heath, Akai — all via MIDI.</p></div>
+      <div class="feature-card"><span class="feature-icon">📡</span><h3>Wireless Devices</h3><p>Multi-device Bluetooth audio, Wi-Fi discovery, and USB hot-plug with automatic driver configuration.</p></div>
+      <div class="feature-card"><span class="feature-icon">🎵</span><h3>All Audio Formats</h3><p>MP3, WAV, FLAC, OGG, AAC, ALAC, AIFF, WMA streamed with zero pre-load latency.</p></div>
+      <div class="feature-card"><span class="feature-icon">🔧</span><h3>Custom MIDI Mapping</h3><p>Full drag-and-drop MIDI learn editor with save/load profiles per controller.</p></div>
+      <div class="feature-card"><span class="feature-icon">📊</span><h3>Real-time Metering</h3><p>VU meters per channel, master bus, and booth output with green → amber → red LED segments.</p></div>
+      <div class="feature-card"><span class="feature-icon">🆓</span><h3>Free &amp; Open Source</h3><p>GPL-3.0. No subscriptions, no paywalls. Full source on GitHub.</p></div>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><span class="stat-value">4</span><div class="stat-label">MIXER CHANNELS</div></div>
+      <div class="stat"><span class="stat-value">16</span><div class="stat-label">PERFORMANCE PADS</div></div>
+      <div class="stat"><span class="stat-value">100+</span><div class="stat-label">CONTROLLERS</div></div>
+      <div class="stat"><span class="stat-value">7</span><div class="stat-label">BEAT EFFECTS</div></div>
+      <div class="stat"><span class="stat-value">GPL</span><div class="stat-label">OPEN SOURCE</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- HARDWARE -->
+<section class="section" id="hardware">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-badge">Compatibility</div>
+      <h2>Works With Your Gear</h2>
+      <p>Auto-detects over 100 MIDI controllers via USB with pre-built mapping profiles.</p>
+    </div>
+    <div class="hw-list">
+      <span class="hw-tag">Pioneer DDJ-400</span><span class="hw-tag">Pioneer DDJ-1000</span>
+      <span class="hw-tag">Pioneer CDJ-2000NXS2</span><span class="hw-tag">Pioneer DJM-800</span>
+      <span class="hw-tag">Pioneer DJM-900NXS2</span><span class="hw-tag">Pioneer DJS-1000</span>
+      <span class="hw-tag">Numark Mixtrack Pro</span><span class="hw-tag">Numark NS7</span>
+      <span class="hw-tag">Reloop Mixon 4</span><span class="hw-tag">Traktor Kontrol S4</span>
+      <span class="hw-tag">Denon SC6000</span><span class="hw-tag">Rane Seventy</span>
+      <span class="hw-tag">Allen &amp; Heath Xone:96</span><span class="hw-tag">Akai APC40</span>
+      <span class="hw-tag">Akai MPC Live</span><span class="hw-tag">Generic MIDI</span>
+      <span class="hw-tag">USB Audio Interfaces</span><span class="hw-tag">Bluetooth Speakers</span>
+      <span class="hw-tag">Wi-Fi Devices</span>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section class="download-section" id="download">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-badge">Get Started</div>
+      <h2>Download Violet DJ Mixer</h2>
+      <p>Ubuntu 20.04 LTS and later. 64-bit Intel/AMD. Python 3.8+.</p>
+    </div>
+    <div class="download-cards">
+      <div class="download-card" style="border-color:var(--amber-lo);">
+        <h3>Ubuntu Package · Recommended</h3>
+        <p>One-click installer with all dependencies bundled. Desktop shortcut included.</p>
+        <a href="https://github.com/violet-dj/violet-dj-mixer/releases/download/v1.1.0/violet-dj-mixer_1.1.0_amd64.deb" class="btn btn-amber" style="width:100%;justify-content:center;">📦 Download violet-dj-mixer_1.1.0_amd64.deb</a>
+        <div class="code-block">wget https://github.com/violet-dj/violet-dj-mixer/releases/download/v1.1.0/violet-dj-mixer_1.1.0_amd64.deb
+sudo apt install ./violet-dj-mixer_1.1.0_amd64.deb
+violet-dj</div>
+      </div>
+      <div class="download-card">
+        <h3>Build from Source</h3>
+        <p>Clone the repository and run directly with Python 3.8+.</p>
+        <a href="https://github.com/violet-dj/violet-dj-mixer" class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:12px;">🐙 View on GitHub</a>
+        <div class="code-block">git clone https://github.com/violet-dj/violet-dj-mixer.git
 cd violet-dj-mixer
 pip3 install -r requirements.txt
-python3 main.py
-            </div>
-        </section>
-        
-        <section id="hardware">
-            <h2>🎛️ Supported Hardware</h2>
-            <h3 style="color: #a0a0a0; margin-top: 20px;">DJ Controllers</h3>
-            <p>
-                Violet DJ supports <span class="highlight">100+ professional DJ controllers</span> including:
-                Pioneer DDJ series, CDJ, DJM Mixers • Numark • Reloop • Traktor Hardware • 
-                Denon DJ • Rane Seventy • Allen & Heath Xone • Akai Professional • and many more
-            </p>
-            
-            <h3 style="color: #a0a0a0; margin-top: 20px;">Audio Devices</h3>
-            <p>
-                USB audio interfaces • Professional sound cards • Turntables & cartridges • 
-                Microphones • Line inputs
-            </p>
-            
-            <h3 style="color: #a0a0a0; margin-top: 20px;">Wireless Connectivity</h3>
-            <p>
-                <span class="highlight">Multiple simultaneous Bluetooth connections</span> for speakers, 
-                headphones, and instruments • Wi-Fi audio devices • Network streaming
-            </p>
-        </section>
-        
-        <section id="docs">
-            <h2>📖 Documentation</h2>
-            <p style="margin-bottom: 20px;">
-                Comprehensive guides for all features and configurations:
-            </p>
-            <div class="feature-grid">
-                <div class="feature-card">
-                    <h3>Getting Started</h3>
-                    <p>Installation guide and first-time setup wizard</p>
-                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/GETTING_STARTED.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
-                        Read Guide →
-                    </a>
-                </div>
-                <div class="feature-card">
-                    <h3>User Manual</h3>
-                    <p>Complete feature documentation and mixing tutorials</p>
-                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/USER_MANUAL.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
-                        Read Manual →
-                    </a>
-                </div>
-                <div class="feature-card">
-                    <h3>Hardware Setup</h3>
-                    <p>Controller and device configuration guides</p>
-                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/HARDWARE_SETUP.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
-                        View Devices →
-                    </a>
-                </div>
-                <div class="feature-card">
-                    <h3>Troubleshooting</h3>
-                    <p>Solutions for common issues and problems</p>
-                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/TROUBLESHOOTING.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
-                        Get Help →
-                    </a>
-                </div>
-                <div class="feature-card">
-                    <h3>MIDI Mapping</h3>
-                    <p>Customize controller mappings for your setup</p>
-                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/MIDI_MAPPING.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
-                        Map Controls →
-                    </a>
-                </div>
-                <div class="feature-card">
-                    <h3>Developer Guide</h3>
-                    <p>Create plugins and extend functionality</p>
-                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/DEVELOPER_GUIDE.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
-                        Develop →
-                    </a>
-                </div>
-            </div>
-        </section>
-        
-        <section id="community">
-            <h2>💬 Community & Support</h2>
-            <p style="margin-bottom: 30px;">
-                Join thousands of musicians and DJs using Violet DJ Mixer. 
-                Get help, share tips, and contribute to development!
-            </p>
-            <div style="text-align: center;">
-                <a href="https://github.com/violet-dj/violet-dj-mixer" class="cta-button">
-                    🐙 GitHub Repository
-                </a>
-                <a href="https://github.com/violet-dj/violet-dj-mixer/issues" class="cta-button">
-                    🐛 Report Issues
-                </a>
-                <a href="https://github.com/violet-dj/violet-dj-mixer/discussions" class="cta-button">
-                    💬 Discussions
-                </a>
-                <a href="https://discord.gg/violet-dj" class="cta-button">
-                    🎵 Discord Community
-                </a>
-            </div>
-        </section>
-        
-        <section style="background: #1e1e2e; padding: 30px; border-radius: 8px; margin: 40px 0;">
-            <h2 style="margin-top: 0;">🌟 Why Choose Violet DJ Mixer?</h2>
-            <ul style="list-style: none; padding-left: 0;">
-                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
-                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
-                    <strong>Completely Free</strong> - No subscriptions, no paywalls, no licensing costs
-                </li>
-                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
-                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
-                    <strong>Open Source</strong> - Full transparency, community-driven development
-                </li>
-                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
-                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
-                    <strong>Professional Quality</strong> - Rivals commercial software costing thousands
-                </li>
-                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
-                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
-                    <strong>Industry Standard Hardware</strong> - Works with Pioneer, Numark, and 100+ controllers
-                </li>
-                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
-                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
-                    <strong>Comprehensive Documentation</strong> - Guides, tutorials, and troubleshooting
-                </li>
-                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
-                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
-                    <strong>Active Community</strong> - Support forums and developer collaboration
-                </li>
-            </ul>
-        </section>
+python3 main.py</div>
+      </div>
+      <div class="download-card">
+        <h3>Quick Launch (Snap/Wayland)</h3>
+        <p>If running inside a snap environment, use this to avoid snap library conflicts.</p>
+        <div class="code-block">SNAP="" GTK_EXE_PREFIX="" GTK_PATH="" \
+GDK_PIXBUF_MODULE_FILE="" \
+GDK_PIXBUF_MODULEDIR="" \
+python3 main.py</div>
+        <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/TROUBLESHOOTING.md" class="btn btn-outline" style="width:100%;justify-content:center;margin-top:12px;">🔧 Troubleshooting Guide</a>
+      </div>
     </div>
-    
-    <footer>
-        <p>
-            <strong>Violet DJ Mixer</strong> v1.0.0 | 
-            <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/LICENSE" style="color: #7c3aed; text-decoration: none;">
-                GNU General Public License v3.0
-            </a>
-        </p>
-        <p style="margin-top: 15px;">
-            Made with 🎵 by the Violet DJ Community for musicians who can't afford expensive software
-        </p>
-        <p style="margin-top: 15px; font-size: 0.9em;">
-            © 2024 Violet DJ Community. All rights reserved. | 
-            <a href="https://violet-dj.github.io">violet-dj.github.io</a>
-        </p>
-    </footer>
+  </div>
+</section>
+
+<!-- SPECS -->
+<section class="section" id="specs">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-badge">Requirements</div>
+      <h2>System Specifications</h2>
+    </div>
+    <div class="spec-grid">
+      <div class="spec-card"><h4>System</h4><ul>
+        <li>Ubuntu 20.04 LTS+</li><li>Python 3.8+</li><li>PyQt6</li>
+        <li>Intel i5 / Ryzen 5 (min)</li><li>4 GB RAM</li><li>500 MB disk</li>
+      </ul></div>
+      <div class="spec-card"><h4>Audio Backends</h4><ul>
+        <li>PulseAudio (default)</li><li>ALSA (low-latency)</li><li>JACK (pro)</li>
+        <li>44.1 / 48 / 96 kHz</li><li>16 / 24 / 32-bit</li><li>&lt;20ms latency</li>
+      </ul></div>
+      <div class="spec-card"><h4>Connectivity</h4><ul>
+        <li>USB MIDI class-compliant</li><li>Bluetooth 4.0+ audio</li>
+        <li>Multi-device Bluetooth</li><li>Wi-Fi mDNS discovery</li>
+        <li>Network audio streaming</li><li>USB audio interfaces</li>
+      </ul></div>
+      <div class="spec-card"><h4>Audio Formats</h4><ul>
+        <li>MP3 (all bitrates)</li><li>WAV / AIFF</li><li>FLAC / ALAC</li>
+        <li>OGG Vorbis</li><li>AAC / M4A</li><li>WMA</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMUNITY -->
+<section class="section" style="border-bottom:none;">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-badge">Open Source</div>
+      <h2>Community &amp; Support</h2>
+      <p>Report bugs, suggest features, contribute code, or just say hi.</p>
+    </div>
+    <div class="community-links">
+      <a href="https://github.com/violet-dj/violet-dj-mixer" class="btn btn-outline">🐙 GitHub Repository</a>
+      <a href="https://github.com/violet-dj/violet-dj-mixer/issues" class="btn btn-outline">🐛 Report Issues</a>
+      <a href="https://github.com/violet-dj/violet-dj-mixer/discussions" class="btn btn-outline">💬 Discussions</a>
+      <a href="https://discord.gg/violet-dj" class="btn btn-outline">🎵 Discord</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo"><div class="dot"></div><span>Violet DJ Mixer</span></div>
+  <div class="footer-links">
+    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/LICENSE">GPL-3.0</a>
+    <a href="https://github.com/violet-dj/violet-dj-mixer">GitHub</a>
+    <a href="https://github.com/violet-dj/violet-dj-mixer/releases">Releases</a>
+    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/GETTING_STARTED.md">Docs</a>
+    <a href="https://github.com/violet-dj/violet-dj-mixer/issues">Support</a>
+  </div>
+  <p>v1.1.0 — Pioneer DJM-800 + DJS-1000 Interface · Free &amp; Open Source</p>
+  <p style="margin-top:8px;">Made for musicians who deserve professional tools without professional prices.</p>
+</footer>
+
 </body>
 </html>
