@@ -1,0 +1,16 @@
+# GitHub Pages configuration for Violet DJ Mixer
+theme: jekyll-theme-slate
+title: Violet DJ Mixer
+description: Professional Digital DJ Mixing Board for Ubuntu
+
+# Site metadata
+author: Violet DJ Community
+repository: violet-dj/violet-dj-mixer
+show_downloads: true
+
+# Jekyll settings
+markdown: kramdown
+highlighter: rouge
+kramdown:
+  input: GFM
+  hard_wrap: false
