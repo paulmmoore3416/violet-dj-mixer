@@ -1,0 +1,19 @@
+site_name: Violet DJ Mixer
+site_description: Professional Digital Mixing Board for Ubuntu
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: purple
+    accent: purple
+  logo: assets/logo.png
+
+nav:
+  - Home: index.md
+  - Getting Started: getting_started.md
+  - User Manual: user_manual.md
+  - Hardware Setup: hardware_setup.md
+  - MIDI Mapping: midi_mapping.md
+  - Troubleshooting: troubleshooting.md
+  - Developer Guide: developer_guide.md
+  - About: about.md

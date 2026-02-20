@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Violet DJ Mixer - Professional Digital Mixing Board</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        
+        header {
+            background: linear-gradient(90deg, #7c3aed 0%, #2e1065 100%);
+            color: white;
+            padding: 60px 20px;
+            text-align: center;
+            border-bottom: 3px solid #7c3aed;
+        }
+        
+        header h1 {
+            font-size: 3.5em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(124, 58, 237, 0.3);
+        }
+        
+        header p {
+            font-size: 1.3em;
+            color: #c4b5fd;
+        }
+        
+        nav {
+            background: #1a1a2e;
+            padding: 15px 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 2px solid #7c3aed;
+        }
+        
+        nav ul {
+            list-style: none;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        nav li {
+            margin: 0 20px;
+        }
+        
+        nav a {
+            color: #e0e0e0;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s;
+        }
+        
+        nav a:hover {
+            color: #7c3aed;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        section {
+            margin-bottom: 60px;
+        }
+        
+        h2 {
+            color: #7c3aed;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #7c3aed;
+            padding-bottom: 15px;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin: 30px 0;
+        }
+        
+        .feature-card {
+            background: #1e1e2e;
+            border-left: 4px solid #7c3aed;
+            padding: 25px;
+            border-radius: 8px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(124, 58, 237, 0.2);
+        }
+        
+        .feature-card h3 {
+            color: #7c3aed;
+            margin-bottom: 10px;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%);
+            color: white;
+            padding: 15px 40px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            margin: 10px 10px 10px 0;
+            transition: transform 0.3s, box-shadow 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1em;
+        }
+        
+        .cta-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(124, 58, 237, 0.4);
+        }
+        
+        .download-section {
+            background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
+            padding: 40px;
+            border-radius: 8px;
+            border-left: 4px solid #7c3aed;
+        }
+        
+        .system-requirements {
+            background: #1e1e2e;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .system-requirements ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+        
+        .system-requirements li {
+            margin: 10px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .system-requirements li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #7c3aed;
+            font-weight: bold;
+        }
+        
+        .highlight {
+            color: #7c3aed;
+            font-weight: bold;
+        }
+        
+        footer {
+            background: #0f0f1e;
+            color: #999;
+            text-align: center;
+            padding: 30px 20px;
+            border-top: 2px solid #7c3aed;
+            margin-top: 60px;
+        }
+        
+        .badges {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .badge {
+            background: #1e1e2e;
+            border: 2px solid #7c3aed;
+            color: #7c3aed;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        .code-block {
+            background: #0f0f1e;
+            border-left: 4px solid #7c3aed;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            color: #a0d468;
+        }
+        
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2em;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            nav ul {
+                flex-direction: column;
+            }
+            
+            nav li {
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🎛️ Violet DJ Mixer</h1>
+        <p>Professional Digital Mixing Board for Ubuntu</p>
+        <p><span class="highlight">Free & Open Source</span> • GPL-3.0 License</p>
+    </header>
+    
+    <nav>
+        <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#download">Download</a></li>
+            <li><a href="#hardware">Hardware</a></li>
+            <li><a href="#docs">Documentation</a></li>
+            <li><a href="#community">Community</a></li>
+        </ul>
+    </nav>
+    
+    <div class="container">
+        <section id="intro">
+            <h2>🎵 Professional DJ Software for Everyone</h2>
+            <p>
+                Violet DJ Mixer is a <span class="highlight">completely free</span>, open-source digital mixing board 
+                designed for DJs, producers, and musicians who can't afford expensive professional software. 
+                Built to rival industry-leading mixers while remaining accessible to all.
+            </p>
+            <div class="badges">
+                <span class="badge">Ubuntu 20.04+</span>
+                <span class="badge">Python 3.8+</span>
+                <span class="badge">GPL-3.0 License</span>
+                <span class="badge">64-bit</span>
+                <span class="badge">Open Source</span>
+            </div>
+        </section>
+        
+        <section id="features">
+            <h2>✨ Powerful Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>🎚️ Professional Mixing Board</h3>
+                    <p>Dual turntable decks with independent EQ, faders, crossfader, and master output metering</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🎧 Hardware Compatible</h3>
+                    <p>Support for 100+ DJ controllers: Pioneer DDJ, Numark, Reloop, Traktor, and more</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🎵 All Audio Formats</h3>
+                    <p>MP3, WAV, FLAC, OGG, AAC, M4A, ALAC, AIFF, WMA - all supported</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📡 Wireless Connectivity</h3>
+                    <p>USB, Bluetooth, and Wi-Fi device support with auto-detection</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🎨 Real-time Visualization</h3>
+                    <p>Waveform display, spectrum analyzer, and audio meters</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🎛️ Audio Effects</h3>
+                    <p>Echo, Reverb, Chorus, Flanger, Phaser, Distortion, Delay, and more</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔧 Fully Customizable</h3>
+                    <p>Complete MIDI mapping, plugin system, and RESTful API</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📚 Comprehensive Docs</h3>
+                    <p>Complete user manual, hardware guides, and troubleshooting</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🚀 High Performance</h3>
+                    <p>Zero-latency mixing with support for multiple simultaneous devices</p>
+                </div>
+            </div>
+        </section>
+        
+        <section id="download">
+            <h2>⬇️ Download & Install</h2>
+            
+            <div class="download-section">
+                <h3 style="color: #7c3aed; margin-bottom: 20px;">Ubuntu Package (Recommended)</h3>
+                <p style="margin-bottom: 20px;">
+                    The easiest way to install Violet DJ Mixer on Ubuntu 20.04 LTS or later:
+                </p>
+                <a href="https://github.com/violet-dj/violet-dj-mixer/releases/download/v1.0.0/violet-dj-mixer_1.0.0_amd64.deb" class="cta-button">
+                    📦 Download .deb Package (v1.0.0)
+                </a>
+                <p style="margin-top: 20px; color: #999;">
+                    Size: ~45 MB | SHA256: <code>auto-generated on release</code>
+                </p>
+            </div>
+            
+            <div class="system-requirements">
+                <h3 style="color: #7c3aed;">System Requirements</h3>
+                <ul>
+                    <li><strong>OS:</strong> Ubuntu 20.04 LTS or later</li>
+                    <li><strong>Processor:</strong> Intel i5 / AMD Ryzen 5 (2.5 GHz+)</li>
+                    <li><strong>RAM:</strong> 4 GB minimum (8 GB recommended)</li>
+                    <li><strong>Storage:</strong> 500 MB free space</li>
+                    <li><strong>Audio:</strong> Built-in or USB audio device</li>
+                </ul>
+            </div>
+            
+            <h3 style="color: #7c3aed; margin-top: 30px;">Installation Instructions</h3>
+            <div class="code-block">
+# Download and install
+wget https://github.com/violet-dj/violet-dj-mixer/releases/download/v1.0.0/violet-dj-mixer_1.0.0_amd64.deb
+sudo apt install ./violet-dj-mixer_1.0.0_amd64.deb
+
+# Launch application
+violet-dj
+            </div>
+            
+            <h3 style="color: #7c3aed; margin-top: 30px;">Build from Source</h3>
+            <div class="code-block">
+git clone https://github.com/violet-dj/violet-dj-mixer.git
+cd violet-dj-mixer
+pip3 install -r requirements.txt
+python3 main.py
+            </div>
+        </section>
+        
+        <section id="hardware">
+            <h2>🎛️ Supported Hardware</h2>
+            <h3 style="color: #a0a0a0; margin-top: 20px;">DJ Controllers</h3>
+            <p>
+                Violet DJ supports <span class="highlight">100+ professional DJ controllers</span> including:
+                Pioneer DDJ series, CDJ, DJM Mixers • Numark • Reloop • Traktor Hardware • 
+                Denon DJ • Rane Seventy • Allen & Heath Xone • Akai Professional • and many more
+            </p>
+            
+            <h3 style="color: #a0a0a0; margin-top: 20px;">Audio Devices</h3>
+            <p>
+                USB audio interfaces • Professional sound cards • Turntables & cartridges • 
+                Microphones • Line inputs
+            </p>
+            
+            <h3 style="color: #a0a0a0; margin-top: 20px;">Wireless Connectivity</h3>
+            <p>
+                <span class="highlight">Multiple simultaneous Bluetooth connections</span> for speakers, 
+                headphones, and instruments • Wi-Fi audio devices • Network streaming
+            </p>
+        </section>
+        
+        <section id="docs">
+            <h2>📖 Documentation</h2>
+            <p style="margin-bottom: 20px;">
+                Comprehensive guides for all features and configurations:
+            </p>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>Getting Started</h3>
+                    <p>Installation guide and first-time setup wizard</p>
+                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/GETTING_STARTED.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
+                        Read Guide →
+                    </a>
+                </div>
+                <div class="feature-card">
+                    <h3>User Manual</h3>
+                    <p>Complete feature documentation and mixing tutorials</p>
+                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/USER_MANUAL.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
+                        Read Manual →
+                    </a>
+                </div>
+                <div class="feature-card">
+                    <h3>Hardware Setup</h3>
+                    <p>Controller and device configuration guides</p>
+                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/HARDWARE_SETUP.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
+                        View Devices →
+                    </a>
+                </div>
+                <div class="feature-card">
+                    <h3>Troubleshooting</h3>
+                    <p>Solutions for common issues and problems</p>
+                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/TROUBLESHOOTING.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
+                        Get Help →
+                    </a>
+                </div>
+                <div class="feature-card">
+                    <h3>MIDI Mapping</h3>
+                    <p>Customize controller mappings for your setup</p>
+                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/MIDI_MAPPING.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
+                        Map Controls →
+                    </a>
+                </div>
+                <div class="feature-card">
+                    <h3>Developer Guide</h3>
+                    <p>Create plugins and extend functionality</p>
+                    <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/docs/DEVELOPER_GUIDE.md" class="cta-button" style="display: block; width: 100%; text-align: center; margin-top: 10px;">
+                        Develop →
+                    </a>
+                </div>
+            </div>
+        </section>
+        
+        <section id="community">
+            <h2>💬 Community & Support</h2>
+            <p style="margin-bottom: 30px;">
+                Join thousands of musicians and DJs using Violet DJ Mixer. 
+                Get help, share tips, and contribute to development!
+            </p>
+            <div style="text-align: center;">
+                <a href="https://github.com/violet-dj/violet-dj-mixer" class="cta-button">
+                    🐙 GitHub Repository
+                </a>
+                <a href="https://github.com/violet-dj/violet-dj-mixer/issues" class="cta-button">
+                    🐛 Report Issues
+                </a>
+                <a href="https://github.com/violet-dj/violet-dj-mixer/discussions" class="cta-button">
+                    💬 Discussions
+                </a>
+                <a href="https://discord.gg/violet-dj" class="cta-button">
+                    🎵 Discord Community
+                </a>
+            </div>
+        </section>
+        
+        <section style="background: #1e1e2e; padding: 30px; border-radius: 8px; margin: 40px 0;">
+            <h2 style="margin-top: 0;">🌟 Why Choose Violet DJ Mixer?</h2>
+            <ul style="list-style: none; padding-left: 0;">
+                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
+                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
+                    <strong>Completely Free</strong> - No subscriptions, no paywalls, no licensing costs
+                </li>
+                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
+                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
+                    <strong>Open Source</strong> - Full transparency, community-driven development
+                </li>
+                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
+                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
+                    <strong>Professional Quality</strong> - Rivals commercial software costing thousands
+                </li>
+                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
+                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
+                    <strong>Industry Standard Hardware</strong> - Works with Pioneer, Numark, and 100+ controllers
+                </li>
+                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
+                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
+                    <strong>Comprehensive Documentation</strong> - Guides, tutorials, and troubleshooting
+                </li>
+                <li style="margin: 15px 0; padding-left: 25px; position: relative;">
+                    <span style="position: absolute; left: 0; color: #7c3aed; font-size: 1.3em;">✓</span>
+                    <strong>Active Community</strong> - Support forums and developer collaboration
+                </li>
+            </ul>
+        </section>
+    </div>
+    
+    <footer>
+        <p>
+            <strong>Violet DJ Mixer</strong> v1.0.0 | 
+            <a href="https://github.com/violet-dj/violet-dj-mixer/blob/main/LICENSE" style="color: #7c3aed; text-decoration: none;">
+                GNU General Public License v3.0
+            </a>
+        </p>
+        <p style="margin-top: 15px;">
+            Made with 🎵 by the Violet DJ Community for musicians who can't afford expensive software
+        </p>
+        <p style="margin-top: 15px; font-size: 0.9em;">
+            © 2024 Violet DJ Community. All rights reserved. | 
+            <a href="https://violet-dj.github.io">violet-dj.github.io</a>
+        </p>
+    </footer>
+</body>
+</html>

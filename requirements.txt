@@ -1,0 +1,41 @@
+# Violet DJ Mixer - Python Dependencies
+
+# UI Framework
+PyQt6==6.6.1
+PyQt6-Qt6==6.6.1
+PyQt6-sip==13.6.0
+
+# Audio Processing
+PyAudio==0.2.13
+librosa==0.10.0
+soundfile==0.12.1
+numpy==1.24.3
+scipy==1.11.2
+
+# MIDI and Device Control
+python-rtmidi==1.5.0
+mido==1.3.0
+pyusb==1.2.1
+
+# Bluetooth Support
+pybluez==0.23
+
+# Audio Backend Support
+alsaaudio==0.10.0
+python-pulseaudio==1.0.1
+
+# Visualization
+matplotlib==3.7.2
+pyqtgraph==0.13.3
+
+# Configuration and Logging
+pyyaml==6.0
+python-daemon==3.0.1
+
+# System Integration
+dbus-python==1.3.0
+gi==1.2
+
+# Utilities
+click==8.1.7
+colorlog==6.7.0
