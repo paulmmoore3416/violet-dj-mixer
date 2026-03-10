@@ -5,6 +5,7 @@ Pioneer DJM-800 + DJS-1000 Hardware-Inspired Interface
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -12,16 +13,42 @@ from datetime import datetime
 
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QLabel, QPushButton, QSlider, QDial,
-                             QGridLayout, QComboBox, QSpinBox,
+                             QGridLayout, QComboBox, QSpinBox, QDoubleSpinBox,
                              QCheckBox, QProgressBar, QFrame, QMessageBox,
                              QFileDialog, QListWidget, QListWidgetItem,
                              QMenu, QTableWidget, QTableWidgetItem,
                              QHeaderView, QSplitter, QInputDialog,
-                             QAbstractItemView)
-from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSlot
+                             QAbstractItemView, QTreeWidget, QTreeWidgetItem,
+                             QLineEdit, QScrollArea, QGroupBox)
+from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSlot, pyqtSignal
 from PyQt6.QtGui import (QFont, QColor, QLinearGradient, QPainter,
-                         QShortcut, QKeySequence, QAction)
+                         QShortcut, QKeySequence, QAction, QPen)
 import logging
+
+# ── Optional sub-modules (graceful degradation) ───────────────────────────────
+try:
+    from src.ui.vu_meter import VUMeter
+    _HAS_VU = True
+except Exception:
+    _HAS_VU = False
+
+try:
+    from src.ui.waveform import WaveformDisplay
+    _HAS_WAVE = True
+except Exception:
+    _HAS_WAVE = False
+
+try:
+    from src.audio.metadata import read_metadata, format_duration
+    _HAS_META = True
+except Exception:
+    _HAS_META = False
+
+try:
+    from src.audio.recorder import Recorder, RECORDINGS_DIR
+    _HAS_REC = True
+except Exception:
+    _HAS_REC = False
 
 logger = logging.getLogger(__name__)
 
@@ -637,6 +664,43 @@ def _btn(text: str, name: str, checkable=False, min_w=60, min_h=30) -> QPushButt
     return b
 
 
+class _CurvePreview(QWidget):
+    """Mini crossfader curve preview drawn with QPainter."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._curve = "linear"
+        self.setStyleSheet("background:#0a0a0a; border:1px solid #1e1e1e; border-radius:3px;")
+
+    def set_curve(self, curve: str) -> None:
+        self._curve = curve
+        self.update()
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        w, h = self.width(), self.height()
+        p.fillRect(0, 0, w, h, QColor("#0a0a0a"))
+        pen = QPen(QColor("#ff8800"), 1)
+        p.setPen(pen)
+        import math
+        pts = []
+        steps = 40
+        for i in range(steps + 1):
+            t = i / steps          # 0.0 → 1.0  (crossfader position)
+            if self._curve == "smooth":
+                v = 0.5 * (1 - math.cos(math.pi * t))   # smooth S-curve
+            elif self._curve == "cut":
+                v = 0.0 if t < 0.5 else 1.0             # hard cut
+            else:
+                v = t                                     # linear
+            px = int(t * (w - 4)) + 2
+            py = int((1.0 - v) * (h - 4)) + 2
+            pts.append((px, py))
+        for i in range(len(pts) - 1):
+            p.drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1])
+        p.end()
+
+
 def _combo(items: list, default: str | None = None) -> QComboBox:
     cb = QComboBox()
     cb.addItems(items)
@@ -704,8 +768,45 @@ class VioletDJMixer(QMainWindow):
 
         # Enhancement 10 – persisted config
         self._config = self._load_config()
-
         self._accent_color: str = self._config.get("accent_color", "#ff8800")
+
+        # Feature 3: Track metadata cache per deck {deck: metadata_dict}
+        self._deck_metadata: dict[int, dict] = {}
+
+        # Feature 5: Loop state per deck
+        self._loop_state: dict[int, dict] = {
+            i: {"active": False, "in": 0.0, "out": 0.0} for i in range(1, 5)
+        }
+
+        # Feature 6: Hot cue storage {track_hash: {slot: position_seconds}}
+        self._hot_cues: dict[str, dict[str, float]] = {}
+        self._hot_cue_btns: dict[int, list[QPushButton]] = {}  # deck→buttons
+
+        # Feature 7: Recorder
+        self._recorder: Recorder | None = Recorder() if _HAS_REC else None  # type: ignore[misc]
+        self._rec_timer = QTimer(self)
+        self._rec_timer.timeout.connect(self._update_rec_display)
+        self._rec_elapsed_lbl: QLabel | None = None
+
+        # Feature 1: VU meter references {channel: VUMeter}
+        self._vu_meters: dict[int, VUMeter] = {}  # type: ignore[type-arg]
+        self._vu_sim_timer = QTimer(self)
+        self._vu_sim_timer.timeout.connect(self._vu_simulate)
+        self._vu_sim_timer.start(80)
+
+        # Feature 2: Waveform displays per deck
+        self._waveforms: dict[int, WaveformDisplay] = {}  # type: ignore[type-arg]
+
+        # Feature 12: Per-deck BPM override labels
+        self._deck_bpm: dict[int, float] = {1: 120.0, 2: 120.0, 3: 120.0, 4: 120.0}
+        self._deck_bpm_spins: dict[int, QDoubleSpinBox] = {}
+
+        # Feature 11: Keyboard shortcut map {action_name: QShortcut}
+        self._shortcut_map: dict[str, QShortcut] = {}
+
+        # Feature 10: Themes dir
+        os.makedirs(os.path.join(self._app_dir, "themes"), exist_ok=True)
+        os.makedirs(os.path.join(self._app_dir, "recordings"), exist_ok=True)
 
         self.setStyleSheet(HARDWARE_STYLESHEET)
         font = QFont()
@@ -728,6 +829,8 @@ class VioletDJMixer(QMainWindow):
         self.tabs.addTab(self.create_sampler_panel(),    "  Sampler  ")
         self.tabs.addTab(self.create_effects_panel(),    "  Effects  ")
         self.tabs.addTab(self.create_queue_panel(),      "  Queue  ")
+        self.tabs.addTab(self.create_library_panel(),    "  Library  ")
+        self.tabs.addTab(self.create_recording_panel(),  "  Record  ")
         self.tabs.addTab(self.create_device_panel(),     "  Devices  ")
         self.tabs.addTab(self.create_controller_panel(), "  Controllers  ")
         self.tabs.addTab(self.create_settings_panel(),   "  Settings  ")
@@ -893,6 +996,14 @@ class VioletDJMixer(QMainWindow):
         num_lbl.setFixedHeight(22)
         lo.addWidget(num_lbl)
 
+        # Feature 2: Waveform display
+        if _HAS_WAVE:
+            wf = WaveformDisplay()
+            wf.setMinimumHeight(36)
+            wf.setMaximumHeight(36)
+            lo.addWidget(wf)
+            self._waveforms[ch] = wf
+
         # Enhancement 5 – track info label for this deck
         deck_lbl = QLabel("— No Track —")
         deck_lbl.setObjectName("deckTrackLabel")
@@ -904,6 +1015,38 @@ class VioletDJMixer(QMainWindow):
         deck_lbl.setMaximumWidth(120)
         lo.addWidget(deck_lbl)
         self._deck_labels[ch] = deck_lbl
+
+        # Feature 12: Per-deck BPM spinbox
+        bpm_row = QHBoxLayout()
+        bpm_row.setSpacing(3)
+        bpm_row.addWidget(_section_label("BPM"))
+        bpm_spin = QDoubleSpinBox()
+        bpm_spin.setRange(60.0, 220.0)
+        bpm_spin.setDecimals(1)
+        bpm_spin.setSingleStep(0.1)
+        bpm_spin.setValue(self._deck_bpm.get(ch, 120.0))
+        bpm_spin.setFixedWidth(68)
+        bpm_spin.setStyleSheet(
+            "QDoubleSpinBox { background:#0a0a0a; color:#ff8800; "
+            "border:1px solid #2a2a2a; border-radius:3px; font-size:9px; "
+            "font-weight:bold; padding:1px 4px; }"
+        )
+        bpm_spin.valueChanged.connect(lambda v, d=ch: self._on_deck_bpm_changed(d, v))
+        self._deck_bpm_spins[ch] = bpm_spin
+        bpm_row.addWidget(bpm_spin)
+        # Nudge buttons ±1
+        for delta, sym in ((-1.0, "−"), (+1.0, "+")):
+            nb = QPushButton(sym)
+            nb.setFixedSize(QSize(18, 18))
+            nb.setStyleSheet(
+                "QPushButton { background:#1a1a1a; color:#888; border:1px solid #2e2e2e; "
+                "border-radius:3px; font-size:10px; font-weight:bold; padding:0; }"
+                "QPushButton:hover { background:#ff8800; color:#fff; }"
+            )
+            nb.clicked.connect(lambda _, d=ch, dv=delta: self._nudge_deck_bpm(d, dv))
+            bpm_row.addWidget(nb)
+        bpm_row.addStretch()
+        lo.addLayout(bpm_row)
 
         lo.addWidget(_hline())
 
@@ -927,18 +1070,24 @@ class VioletDJMixer(QMainWindow):
         lo.addWidget(_section_label("EQ"))
         lo.addWidget(_hline())
 
-        # Level meter + COLOR knob side by side
+        # Feature 1: Animated VU Meter (replaces static QProgressBar)
         meter_row = QHBoxLayout()
         meter_row.setSpacing(8)
 
-        meter = QProgressBar()
-        meter.setOrientation(Qt.Orientation.Vertical)
-        meter.setMaximum(100)
-        meter.setValue(25 + ch * 7)
-        meter.setTextVisible(False)
-        meter.setMaximumWidth(10)
-        meter.setMinimumHeight(100)
-        meter_row.addWidget(meter, alignment=Qt.AlignmentFlag.AlignHCenter)
+        if _HAS_VU:
+            vu = VUMeter(channels=2, bar_width=7, gap=2)
+            vu.setMinimumHeight(100)
+            meter_row.addWidget(vu, alignment=Qt.AlignmentFlag.AlignHCenter)
+            self._vu_meters[ch] = vu
+        else:
+            meter = QProgressBar()
+            meter.setOrientation(Qt.Orientation.Vertical)
+            meter.setMaximum(100)
+            meter.setValue(25 + ch * 7)
+            meter.setTextVisible(False)
+            meter.setMaximumWidth(10)
+            meter.setMinimumHeight(100)
+            meter_row.addWidget(meter, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         color_lo, _ = _knob_col("COLOR", 30, 42)
         meter_row.addLayout(color_lo)
@@ -982,6 +1131,54 @@ class VioletDJMixer(QMainWindow):
         fader_wrap.addWidget(fader)
         fader_wrap.addStretch()
         lo.addLayout(fader_wrap)
+
+        # Feature 5: Loop Controls
+        lo.addWidget(_hline())
+        lo.addWidget(_section_label("Loop"))
+        loop_row1 = QHBoxLayout()
+        loop_row1.setSpacing(3)
+        loop_in_btn = QPushButton("IN")
+        loop_in_btn.setFixedHeight(24)
+        loop_in_btn.setStyleSheet("""
+            QPushButton { background:#003320; color:#44cc66; border:1px solid #005530;
+                border-radius:3px; font-size:9px; font-weight:bold; }
+            QPushButton:hover { background:#00aa44; color:#fff; }
+        """)
+        loop_in_btn.clicked.connect(lambda _, d=ch: self._loop_in(d))
+        loop_row1.addWidget(loop_in_btn)
+
+        loop_out_btn = QPushButton("OUT")
+        loop_out_btn.setFixedHeight(24)
+        loop_out_btn.setStyleSheet("""
+            QPushButton { background:#003320; color:#44cc66; border:1px solid #005530;
+                border-radius:3px; font-size:9px; font-weight:bold; }
+            QPushButton:hover { background:#00aa44; color:#fff; }
+        """)
+        loop_out_btn.clicked.connect(lambda _, d=ch: self._loop_out(d))
+        loop_row1.addWidget(loop_out_btn)
+
+        loop_active_btn = QPushButton("LOOP")
+        loop_active_btn.setCheckable(True)
+        loop_active_btn.setFixedHeight(24)
+        loop_active_btn.setStyleSheet("""
+            QPushButton { background:#1a1a1a; color:#555; border:1px solid #2e2e2e;
+                border-radius:3px; font-size:9px; font-weight:bold; }
+            QPushButton:checked { background:#00aa44; color:#fff; border-color:#00cc55; }
+            QPushButton:hover { border-color:#44cc66; }
+        """)
+        loop_active_btn.toggled.connect(lambda on, d=ch: self._toggle_loop(d, on))
+        loop_row1.addWidget(loop_active_btn)
+        lo.addLayout(loop_row1)
+
+        loop_size_combo = QComboBox()
+        loop_size_combo.addItems(["1/8", "1/4", "1/2", "1", "2", "4", "8"])
+        loop_size_combo.setCurrentText("1")
+        loop_size_combo.setFixedHeight(22)
+        loop_size_combo.setStyleSheet(
+            "QComboBox { background:#0a0a0a; color:#aaa; border:1px solid #2a2a2a; "
+            "border-radius:3px; font-size:9px; padding:1px 4px; }"
+        )
+        lo.addWidget(loop_size_combo)
 
         # Crossfade assign
         lo.addWidget(_section_label("CF Assign"))
@@ -1114,7 +1311,43 @@ class VioletDJMixer(QMainWindow):
         master_row.addStretch()
         lo.addLayout(master_row)
 
-        lo.addStretch()
+        lo.addWidget(_hline())
+
+        # Feature 9: Master EQ — 5-band graphic
+        lo.addWidget(_section_label("Master EQ"))
+        eq_bands = [("32", 32), ("250", 250), ("1k", 1000), ("4k", 4000), ("16k", 16000)]
+        self._master_eq_sliders: dict[str, QSlider] = {}
+        eq_row = QHBoxLayout()
+        eq_row.setSpacing(4)
+        for band_name, _ in eq_bands:
+            col = QVBoxLayout()
+            col.setSpacing(2)
+            sl = QSlider(Qt.Orientation.Vertical)
+            sl.setRange(-12, 12)
+            sl.setValue(0)
+            sl.setFixedHeight(60)
+            sl.setFixedWidth(18)
+            sl.setStyleSheet("""
+                QSlider::groove:vertical { width:3px; background:#0a0a0a;
+                    border:1px solid #1a1a1a; border-radius:1px; }
+                QSlider::handle:vertical { background:#888; border:1px solid #aaa;
+                    height:8px; width:14px; margin:0 -5px; border-radius:2px; }
+                QSlider::sub-page:vertical { background:#ff8800; border-radius:1px; }
+                QSlider::add-page:vertical { background:#ff8800; border-radius:1px; }
+            """)
+            val_lbl = QLabel("0")
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            val_lbl.setStyleSheet("font-size:7px; color:#666; background:transparent;")
+            sl.valueChanged.connect(lambda v, l=val_lbl: l.setText(str(v)))
+            self._master_eq_sliders[band_name] = sl
+            col.addWidget(sl, alignment=Qt.AlignmentFlag.AlignHCenter)
+            col.addWidget(val_lbl)
+            bnd_lbl = QLabel(band_name)
+            bnd_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            bnd_lbl.setStyleSheet("font-size:7px; color:#555; background:transparent;")
+            col.addWidget(bnd_lbl)
+            eq_row.addLayout(col)
+        lo.addLayout(eq_row)
 
         # ON/OFF
         onoff_row = QHBoxLayout()
@@ -1151,16 +1384,28 @@ class VioletDJMixer(QMainWindow):
 
         lo.addSpacing(20)
         lo.addWidget(_section_label("Curve"))
-        for shape in ("⌒", "—", "⌓"):
+        self._xfade_curve = "linear"   # Feature 8 state
+        curve_btns = []
+        for shape, curve_id in (("⌒", "smooth"), ("—", "linear"), ("⌓", "cut")):
             b = QPushButton(shape)
             b.setCheckable(True)
+            b.setChecked(curve_id == "linear")
             b.setFixedSize(QSize(28, 28))
             b.setStyleSheet("""
                 QPushButton { background:#1a1a1a; color:#555; border:1px solid #2e2e2e;
                     border-radius:3px; font-size:12px; }
                 QPushButton:checked { color:#ff8800; border-color:#ff8800; }
             """)
+            b.clicked.connect(lambda _, cid=curve_id: self._set_xfade_curve(cid))
+            b.setProperty("curveId", curve_id)
+            curve_btns.append(b)
             lo.addWidget(b)
+        self._xfade_curve_btns = curve_btns
+
+        # Feature 8: mini curve preview (QPainter inline widget)
+        self._curve_preview = _CurvePreview()
+        self._curve_preview.setFixedSize(QSize(50, 40))
+        lo.addWidget(self._curve_preview)
 
         return frame
 
@@ -1994,6 +2239,30 @@ class VioletDJMixer(QMainWindow):
         accent_row.addStretch()
         t_lo.addLayout(accent_row)
 
+        # Feature 10: Theme export / import + built-in theme presets
+        t_lo.addWidget(_hline())
+        theme_preset_row = QHBoxLayout()
+        theme_preset_row.setSpacing(6)
+        theme_preset_row.addWidget(QLabel("Theme Preset:"))
+        theme_preset_combo = _combo([
+            "Dark Amber (Default)", "Dark Blue", "Red Alert",
+            "Emerald", "Purple Haze",
+        ])
+        theme_preset_combo.currentTextChanged.connect(self._apply_theme_preset)
+        theme_preset_row.addWidget(theme_preset_combo)
+        t_lo.addLayout(theme_preset_row)
+
+        theme_io_row = QHBoxLayout()
+        theme_io_row.setSpacing(6)
+        export_theme_btn = QPushButton("Export Theme…")
+        export_theme_btn.clicked.connect(self._export_theme)
+        import_theme_btn = QPushButton("Import Theme…")
+        import_theme_btn.clicked.connect(self._import_theme)
+        theme_io_row.addWidget(export_theme_btn)
+        theme_io_row.addWidget(import_theme_btn)
+        theme_io_row.addStretch()
+        t_lo.addLayout(theme_io_row)
+
         # Enhancement 10 – Save / Reset config buttons
         cfg_row = QHBoxLayout()
         cfg_row.setSpacing(8)
@@ -2007,6 +2276,39 @@ class VioletDJMixer(QMainWindow):
         t_lo.addLayout(cfg_row)
         t_lo.addStretch()
         lo.addWidget(theme_frame)
+
+        # Feature 11: Keyboard Shortcut Editor
+        sc_frame, sc_lo = _side_frame()
+        sc_frame.setObjectName("panelLeft")
+        sc_lo.addWidget(_panel_title("Keyboard Shortcuts"))
+        self._shortcut_table = QTableWidget(0, 2)
+        self._shortcut_table.setHorizontalHeaderLabels(["Action", "Key"])
+        hdr = self._shortcut_table.horizontalHeader()
+        if hdr:
+            hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+            hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+            hdr.resizeSection(1, 100)
+        self._shortcut_table.setStyleSheet("""
+            QTableWidget { background:#0d0d0d; color:#cccccc;
+                border:1px solid #2a2a2a; gridline-color:#1a1a1a; font-size:10px; }
+            QTableWidget::item:selected { background:#1a3050; color:#fff; }
+            QHeaderView::section { background:#1a1a1a; color:#888; border:none;
+                border-bottom:1px solid #2a2a2a; padding:4px; font-size:9px; }
+        """)
+        self._shortcut_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._populate_shortcut_table()
+        sc_lo.addWidget(self._shortcut_table)
+
+        sc_btn_row = QHBoxLayout()
+        remap_btn = QPushButton("Remap Selected")
+        remap_btn.clicked.connect(self._remap_shortcut)
+        reset_sc_btn = QPushButton("Reset All")
+        reset_sc_btn.clicked.connect(self._reset_shortcuts)
+        sc_btn_row.addWidget(remap_btn)
+        sc_btn_row.addWidget(reset_sc_btn)
+        sc_btn_row.addStretch()
+        sc_lo.addLayout(sc_btn_row)
+        lo.addWidget(sc_frame)
 
         lo.addStretch()
         return root
@@ -2039,13 +2341,56 @@ class VioletDJMixer(QMainWindow):
             self._add_recent_track(p)
             # Enhancement 4 – log to session file
             self._log_track_played(p)
-            # Enhancement 5 – update deck label
             name = os.path.basename(p)
+
+            # Feature 3: Read track metadata
+            meta: dict = {}
+            if _HAS_META:
+                try:
+                    meta = read_metadata(p)
+                    self._deck_metadata[deck] = meta
+                    dur_str = format_duration(meta.get("duration", 0.0))
+                    bpm_val = meta.get("bpm", 0.0)
+                    artist  = meta.get("artist", "")
+                    title   = meta.get("title", name)
+                    label_text = f"{artist} – {title}" if artist else title
+                    label_text += f"  [{dur_str}]"
+                    if bpm_val:
+                        label_text += f"  {bpm_val:.0f}bpm"
+                        if deck in self._deck_bpm_spins:
+                            self._deck_bpm_spins[deck].setValue(bpm_val)
+                            self._deck_bpm[deck] = bpm_val
+                except Exception as e:
+                    logger.warning(f"Metadata read failed: {e}")
+                    label_text = name
+            else:
+                label_text = name
+
+            # Enhancement 5 – update deck label
             if deck in self._deck_labels:
-                self._deck_labels[deck].setText(name[:20] + "…" if len(name) > 20 else name)
+                short = label_text[:28] + "…" if len(label_text) > 28 else label_text
+                self._deck_labels[deck].setText(short)
+
+            # Feature 2: Update waveform display
+            if _HAS_WAVE and deck in self._waveforms:
+                duration = meta.get("duration", 0.0) if meta else 0.0
+                self._waveforms[deck].load_track(p)
+
+            # Feature 6: Load hot cues for this track
+            self._load_hot_cues(p, deck)
+
+            # Feature 1: Activate VU simulation for this deck
+            if deck in self._vu_meters:
+                self._vu_meters[deck].set_active(True)
+
             # Enhancement 12 – add to queue list
             if hasattr(self, "_queue_list"):
                 self._queue_list.addItem(QListWidgetItem(name))
+
+            # Feature 4: Add to library recents if open
+            if hasattr(self, "_lib_recent_list"):
+                self._lib_recent_list.addItem(QListWidgetItem(name))
+
             logger.info(f"Loading track: {p}")
 
     def open_playlist(self):
@@ -2465,3 +2810,657 @@ class VioletDJMixer(QMainWindow):
         if sb:
             sb.showMessage(f"MIDI Learn: CC {cc} mapped to '{action}'", 5000)
         logger.info(f"MIDI Learn UI updated: CC {cc} → {action}")
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  Feature 4: LIBRARY TAB — file browser + search + track table
+    # ════════════════════════════════════════════════════════════════════════
+    def create_library_panel(self) -> QWidget:
+        root = QWidget()
+        root.setStyleSheet("background:transparent;")
+        outer = QHBoxLayout(root)
+        outer.setContentsMargins(4, 4, 4, 4)
+        outer.setSpacing(8)
+
+        # ── Left: folder tree ────────────────────────────────────────────
+        tree_frame, tree_lo = _side_frame()
+        tree_frame.setMaximumWidth(240)
+        tree_lo.addWidget(_panel_title("Folders"))
+
+        self._lib_folder_tree = QTreeWidget()
+        self._lib_folder_tree.setHeaderHidden(True)
+        self._lib_folder_tree.setStyleSheet("""
+            QTreeWidget { background:#0d0d0d; color:#aaaaaa;
+                border:1px solid #2a2a2a; font-size:10px; }
+            QTreeWidget::item:selected { background:#1a3050; color:#fff; }
+            QTreeWidget::item:hover { background:#141414; }
+        """)
+        # Seed with common music folders
+        for folder in (
+            os.path.expanduser("~/Music"),
+            os.path.expanduser("~/Downloads"),
+            "/media",
+        ):
+            if os.path.isdir(folder):
+                item = QTreeWidgetItem([os.path.basename(folder)])
+                item.setData(0, Qt.ItemDataRole.UserRole, folder)
+                self._lib_folder_tree.addTopLevelItem(item)
+                self._lib_scan_folder(item, folder, depth=1)
+        self._lib_folder_tree.itemClicked.connect(self._lib_folder_clicked)
+        tree_lo.addWidget(self._lib_folder_tree)
+
+        browse_btn = QPushButton("Browse…")
+        browse_btn.clicked.connect(self._lib_browse_folder)
+        tree_lo.addWidget(browse_btn)
+        outer.addWidget(tree_frame)
+
+        # ── Right: search + track table ──────────────────────────────────
+        right = QWidget()
+        right.setStyleSheet("background:transparent;")
+        right_lo = QVBoxLayout(right)
+        right_lo.setContentsMargins(0, 0, 0, 0)
+        right_lo.setSpacing(6)
+
+        # Search bar
+        search_frame = QFrame()
+        search_frame.setObjectName("glassCard")
+        search_lo = QHBoxLayout(search_frame)
+        search_lo.setContentsMargins(8, 6, 8, 6)
+        search_lo.setSpacing(6)
+        search_lo.addWidget(_section_label("Search:"))
+        self._lib_search = QLineEdit()
+        self._lib_search.setPlaceholderText("Filter tracks by name, artist, or BPM…")
+        self._lib_search.setStyleSheet(
+            "QLineEdit { background:#0a0a0a; color:#cccccc; border:1px solid #2a2a2a; "
+            "border-radius:3px; padding:4px 8px; font-size:10px; }"
+            "QLineEdit:focus { border-color:#ff8800; }"
+        )
+        self._lib_search.textChanged.connect(self._lib_filter_tracks)
+        search_lo.addWidget(self._lib_search)
+        right_lo.addWidget(search_frame)
+
+        # Track table
+        self._lib_track_table = QTableWidget(0, 5)
+        self._lib_track_table.setHorizontalHeaderLabels(
+            ["Title", "Artist", "Duration", "BPM", "Format"])
+        hdr = self._lib_track_table.horizontalHeader()
+        if hdr:
+            hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+            hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            for c in (2, 3, 4):
+                hdr.setSectionResizeMode(c, QHeaderView.ResizeMode.Fixed)
+                hdr.resizeSection(c, 70)
+        self._lib_track_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._lib_track_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._lib_track_table.setAlternatingRowColors(True)
+        self._lib_track_table.setStyleSheet("""
+            QTableWidget { background:#0d0d0d; color:#cccccc;
+                border:1px solid #2a2a2a; gridline-color:#1a1a1a; font-size:10px; }
+            QTableWidget::item:selected { background:#1a3050; color:#fff; }
+            QTableWidget::item:alternate { background:#111111; }
+            QHeaderView::section { background:#1a1a1a; color:#888; border:none;
+                border-bottom:1px solid #2a2a2a; padding:4px; font-size:9px; }
+        """)
+        self._lib_track_table.doubleClicked.connect(self._lib_load_selected)
+        right_lo.addWidget(self._lib_track_table)
+
+        # Bottom row
+        bottom_row = QHBoxLayout()
+        load_a_btn = QPushButton("Load → Deck A")
+        load_a_btn.clicked.connect(lambda: self._lib_load_to_deck(1))
+        load_b_btn = QPushButton("Load → Deck B")
+        load_b_btn.clicked.connect(lambda: self._lib_load_to_deck(2))
+        queue_btn = QPushButton("Add to Queue")
+        queue_btn.clicked.connect(self._lib_add_to_queue)
+        self._lib_status_lbl = QLabel("0 tracks")
+        self._lib_status_lbl.setStyleSheet("color:#555; font-size:9px; background:transparent;")
+        bottom_row.addWidget(load_a_btn)
+        bottom_row.addWidget(load_b_btn)
+        bottom_row.addWidget(queue_btn)
+        bottom_row.addStretch()
+        bottom_row.addWidget(self._lib_status_lbl)
+        right_lo.addLayout(bottom_row)
+
+        # Recent tracks panel
+        recent_frame = QFrame()
+        recent_frame.setObjectName("glassCard")
+        recent_lo = QVBoxLayout(recent_frame)
+        recent_lo.setContentsMargins(8, 6, 8, 6)
+        recent_lo.setSpacing(4)
+        recent_lo.addWidget(_section_label("Recently Loaded"))
+        self._lib_recent_list = QListWidget()
+        self._lib_recent_list.setMaximumHeight(70)
+        self._lib_recent_list.setStyleSheet("""
+            QListWidget { background:#0a0a0a; color:#888; border:none; font-size:9px; }
+            QListWidget::item:selected { background:#1a3050; color:#fff; }
+        """)
+        for t in self._recent_tracks[-8:]:
+            self._lib_recent_list.addItem(QListWidgetItem(os.path.basename(t)))
+        recent_lo.addWidget(self._lib_recent_list)
+        right_lo.addWidget(recent_frame)
+
+        outer.addWidget(right, 1)
+        return root
+
+    def _lib_scan_folder(self, parent_item: QTreeWidgetItem,
+                          folder: str, depth: int = 0) -> None:
+        if depth <= 0:
+            return
+        try:
+            for entry in sorted(os.scandir(folder), key=lambda e: e.name):
+                if entry.is_dir(follow_symlinks=False):
+                    child = QTreeWidgetItem([entry.name])
+                    child.setData(0, Qt.ItemDataRole.UserRole, entry.path)
+                    parent_item.addChild(child)
+                    self._lib_scan_folder(child, entry.path, depth - 1)
+        except PermissionError:
+            pass
+
+    @pyqtSlot(QTreeWidgetItem)
+    def _lib_folder_clicked(self, item: QTreeWidgetItem) -> None:
+        folder = item.data(0, Qt.ItemDataRole.UserRole)
+        if folder and os.path.isdir(folder):
+            # Expand sub-folders on click
+            if item.childCount() == 0:
+                self._lib_scan_folder(item, folder, depth=1)
+            self._lib_populate_tracks(folder)
+
+    @pyqtSlot()
+    def _lib_browse_folder(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "Select Music Folder")
+        if folder:
+            self._lib_populate_tracks(folder)
+            item = QTreeWidgetItem([os.path.basename(folder)])
+            item.setData(0, Qt.ItemDataRole.UserRole, folder)
+            self._lib_folder_tree.addTopLevelItem(item)
+
+    def _lib_populate_tracks(self, folder: str) -> None:
+        """Fill the track table from audio files in *folder*."""
+        self._lib_track_table.setRowCount(0)
+        exts = {".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a", ".aiff", ".alac"}
+        try:
+            files = sorted(
+                e.path for e in os.scandir(folder)
+                if e.is_file() and os.path.splitext(e.name)[1].lower() in exts
+            )
+        except PermissionError:
+            return
+        for path in files:
+            self._lib_add_track_row(path)
+        count = self._lib_track_table.rowCount()
+        self._lib_status_lbl.setText(f"{count} track{'s' if count != 1 else ''}")
+
+    def _lib_add_track_row(self, path: str) -> None:
+        if _HAS_META:
+            try:
+                meta = read_metadata(path)
+            except Exception:
+                meta = {}
+        else:
+            meta = {}
+        title   = meta.get("title",  os.path.splitext(os.path.basename(path))[0])
+        artist  = meta.get("artist", "")
+        dur     = format_duration(meta.get("duration", 0.0)) if _HAS_META else "--:--"
+        bpm_val = meta.get("bpm", 0.0)
+        bpm_str = f"{bpm_val:.0f}" if bpm_val else ""
+        fmt     = meta.get("format", os.path.splitext(path)[1].lstrip(".").upper())
+        row = self._lib_track_table.rowCount()
+        self._lib_track_table.insertRow(row)
+        for col, text in enumerate((title, artist, dur, bpm_str, fmt)):
+            item = QTableWidgetItem(text)
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            self._lib_track_table.setItem(row, col, item)
+
+    @pyqtSlot(str)
+    def _lib_filter_tracks(self, query: str) -> None:
+        q = query.lower()
+        for row in range(self._lib_track_table.rowCount()):
+            row_text = " ".join(
+                (self._lib_track_table.item(row, c) or QTableWidgetItem("")).text()
+                for c in range(self._lib_track_table.columnCount())
+            ).lower()
+            self._lib_track_table.setRowHidden(row, bool(q) and q not in row_text)
+
+    def _lib_selected_path(self) -> str | None:
+        row = self._lib_track_table.currentRow()
+        if row < 0:
+            return None
+        item = self._lib_track_table.item(row, 0)
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    @pyqtSlot()
+    def _lib_load_selected(self) -> None:
+        path = self._lib_selected_path()
+        if path:
+            self.open_track.__func__(self, 1)   # delegate; simpler: just call open_track
+
+    def _lib_load_to_deck(self, deck: int) -> None:
+        path = self._lib_selected_path()
+        if path:
+            self._add_recent_track(path)
+            self._log_track_played(path)
+            name = os.path.basename(path)
+            if deck in self._deck_labels:
+                self._deck_labels[deck].setText(name[:28])
+            if _HAS_WAVE and deck in self._waveforms:
+                self._waveforms[deck].load_track(path)
+            if deck in self._vu_meters:
+                self._vu_meters[deck].set_active(True)
+            sb = self.statusBar()
+            if sb:
+                sb.showMessage(f"Deck {deck}: {name}", 4000)
+
+    @pyqtSlot()
+    def _lib_add_to_queue(self) -> None:
+        path = self._lib_selected_path()
+        if path and hasattr(self, "_queue_list"):
+            self._queue_list.addItem(QListWidgetItem(os.path.basename(path)))
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  Feature 7: RECORDING TAB
+    # ════════════════════════════════════════════════════════════════════════
+    def create_recording_panel(self) -> QWidget:
+        root = QWidget()
+        root.setStyleSheet("background:transparent;")
+        lo = QVBoxLayout(root)
+        lo.setContentsMargins(4, 4, 4, 4)
+        lo.setSpacing(10)
+
+        # ── Controls panel ────────────────────────────────────────────────
+        ctrl_frame, ctrl_lo = _side_frame()
+        ctrl_lo.addWidget(_panel_title("Master Recorder"))
+
+        # Status indicator
+        self._rec_status_lbl = QLabel("● STOPPED")
+        self._rec_status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._rec_status_lbl.setStyleSheet(
+            "color:#884444; font-size:14px; font-weight:bold; background:transparent;"
+        )
+        ctrl_lo.addWidget(self._rec_status_lbl)
+
+        # Elapsed timer
+        self._rec_elapsed_lbl = QLabel("00:00:00")
+        self._rec_elapsed_lbl.setObjectName("bpmValue")
+        self._rec_elapsed_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ctrl_lo.addWidget(self._rec_elapsed_lbl)
+
+        # Output path
+        path_row = QHBoxLayout()
+        path_row.addWidget(_section_label("Output:"))
+        self._rec_path_lbl = QLabel("~/.violet_dj/recordings/")
+        self._rec_path_lbl.setStyleSheet("color:#556677; font-size:9px; background:transparent;")
+        path_row.addWidget(self._rec_path_lbl)
+        choose_btn = QPushButton("…")
+        choose_btn.setFixedSize(QSize(28, 24))
+        choose_btn.clicked.connect(self._rec_choose_path)
+        path_row.addWidget(choose_btn)
+        ctrl_lo.addLayout(path_row)
+
+        ctrl_lo.addWidget(_hline())
+
+        # Start / Stop / Discard
+        rec_btn_row = QHBoxLayout()
+        self._rec_start_btn = QPushButton("● Record")
+        self._rec_start_btn.setMinimumHeight(40)
+        self._rec_start_btn.setStyleSheet("""
+            QPushButton { background:#330000; color:#cc4444; border:1px solid #550000;
+                border-radius:4px; font-size:12px; font-weight:bold; }
+            QPushButton:hover { background:#cc2222; color:#fff; }
+        """)
+        self._rec_start_btn.clicked.connect(self._start_recording)
+        rec_btn_row.addWidget(self._rec_start_btn)
+
+        self._rec_stop_btn = QPushButton("■ Stop")
+        self._rec_stop_btn.setMinimumHeight(40)
+        self._rec_stop_btn.setEnabled(False)
+        self._rec_stop_btn.clicked.connect(self._stop_recording)
+        rec_btn_row.addWidget(self._rec_stop_btn)
+        ctrl_lo.addLayout(rec_btn_row)
+
+        ctrl_lo.addWidget(_hline())
+
+        # Format selector
+        fmt_row = QHBoxLayout()
+        fmt_row.addWidget(_section_label("Format:"))
+        fmt_combo = _combo(["WAV 16-bit 44.1kHz", "WAV 24-bit 48kHz"])
+        fmt_row.addWidget(fmt_combo)
+        ctrl_lo.addLayout(fmt_row)
+
+        ctrl_lo.addStretch()
+        lo.addWidget(ctrl_frame)
+
+        # ── Recordings list ───────────────────────────────────────────────
+        list_frame, list_lo = _side_frame()
+        list_lo.addWidget(_panel_title("Saved Recordings"))
+        self._rec_list = QListWidget()
+        self._rec_list.setStyleSheet("""
+            QListWidget { background:#0d0d0d; color:#aaaaaa;
+                border:1px solid #2a2a2a; font-size:10px; }
+            QListWidget::item:selected { background:#1a3050; color:#fff; }
+        """)
+        self._rec_list.setMinimumHeight(200)
+        self._refresh_recordings_list()
+        list_lo.addWidget(self._rec_list)
+
+        rec_list_btns = QHBoxLayout()
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.clicked.connect(self._refresh_recordings_list)
+        delete_btn = QPushButton("Delete")
+        delete_btn.clicked.connect(self._delete_recording)
+        rec_list_btns.addWidget(refresh_btn)
+        rec_list_btns.addWidget(delete_btn)
+        rec_list_btns.addStretch()
+        list_lo.addLayout(rec_list_btns)
+        lo.addWidget(list_frame)
+
+        lo.addStretch()
+        return root
+
+    @pyqtSlot()
+    def _start_recording(self) -> None:
+        if not _HAS_REC or self._recorder is None:
+            QMessageBox.warning(self, "Recording", "Recorder module not available.")
+            return
+        if self._recorder.is_recording:
+            return
+        path = self._recorder.start()
+        self._rec_path_lbl.setText(path)
+        self._rec_start_btn.setEnabled(False)
+        self._rec_stop_btn.setEnabled(True)
+        self._rec_status_lbl.setText("● RECORDING")
+        self._rec_status_lbl.setStyleSheet(
+            "color:#cc2222; font-size:14px; font-weight:bold; background:transparent;"
+        )
+        self._rec_timer.start(1000)
+        sb = self.statusBar()
+        if sb:
+            sb.showMessage(f"Recording: {path}", 4000)
+
+    @pyqtSlot()
+    def _stop_recording(self) -> None:
+        if not _HAS_REC or self._recorder is None:
+            return
+        path = self._recorder.stop()
+        self._rec_timer.stop()
+        self._rec_start_btn.setEnabled(True)
+        self._rec_stop_btn.setEnabled(False)
+        self._rec_status_lbl.setText("● STOPPED")
+        self._rec_status_lbl.setStyleSheet(
+            "color:#884444; font-size:14px; font-weight:bold; background:transparent;"
+        )
+        self._refresh_recordings_list()
+        sb = self.statusBar()
+        if sb:
+            sb.showMessage(f"Recording saved: {path}", 5000)
+
+    @pyqtSlot()
+    def _update_rec_display(self) -> None:
+        if _HAS_REC and self._recorder and self._recorder.is_recording:
+            e = int(self._recorder.elapsed)
+            h, rem = divmod(e, 3600)
+            m, s = divmod(rem, 60)
+            if self._rec_elapsed_lbl:
+                self._rec_elapsed_lbl.setText(f"{h:02d}:{m:02d}:{s:02d}")
+
+    @pyqtSlot()
+    def _rec_choose_path(self) -> None:
+        rec_dir = RECORDINGS_DIR if _HAS_REC else os.path.expanduser("~/.violet_dj/recordings")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Recording", rec_dir, "WAV Files (*.wav)")
+        if path:
+            self._rec_path_lbl.setText(path)
+
+    @pyqtSlot()
+    def _refresh_recordings_list(self) -> None:
+        self._rec_list.clear()
+        if _HAS_REC and self._recorder:
+            for name in self._recorder.list_recordings():
+                self._rec_list.addItem(QListWidgetItem(name))
+
+    @pyqtSlot()
+    def _delete_recording(self) -> None:
+        item = self._rec_list.currentItem()
+        if not item:
+            return
+        rec_dir = RECORDINGS_DIR if _HAS_REC else os.path.expanduser("~/.violet_dj/recordings")
+        path = os.path.join(rec_dir, item.text())
+        if QMessageBox.question(self, "Delete Recording",
+                                f"Delete {item.text()}?") == QMessageBox.StandardButton.Yes:
+            try:
+                os.remove(path)
+                self._refresh_recordings_list()
+            except Exception as e:
+                QMessageBox.warning(self, "Delete Failed", str(e))
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  Feature 1: VU Meter animation
+    # ════════════════════════════════════════════════════════════════════════
+    @pyqtSlot()
+    def _vu_simulate(self) -> None:
+        """Drive VU meters with a simulated signal when a deck is active."""
+        import random
+        for ch, vu in self._vu_meters.items():
+            if vu._active:  # type: ignore[attr-defined]
+                base = 0.55 + random.gauss(0, 0.1)
+                vu.set_levels([
+                    max(0.0, min(1.0, base + random.gauss(0, 0.05))),
+                    max(0.0, min(1.0, base + random.gauss(0, 0.05))),
+                ])
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  Feature 5: Loop Controls
+    # ════════════════════════════════════════════════════════════════════════
+    def _loop_in(self, deck: int) -> None:
+        pos = 0.3   # In a real engine this would be current playback position
+        self._loop_state[deck]["in"] = pos
+        if _HAS_WAVE and deck in self._waveforms:
+            out = self._loop_state[deck].get("out", -1.0)
+            if out > pos:
+                self._waveforms[deck].set_loop(pos, out)
+        logger.info(f"Deck {deck}: loop in @ {pos:.3f}")
+
+    def _loop_out(self, deck: int) -> None:
+        pos = 0.7
+        self._loop_state[deck]["out"] = pos
+        if _HAS_WAVE and deck in self._waveforms:
+            in_p = self._loop_state[deck].get("in", -1.0)
+            if 0 <= in_p < pos:
+                self._waveforms[deck].set_loop(in_p, pos)
+        logger.info(f"Deck {deck}: loop out @ {pos:.3f}")
+
+    def _toggle_loop(self, deck: int, active: bool) -> None:
+        self._loop_state[deck]["active"] = active
+        if _HAS_WAVE and deck in self._waveforms:
+            if active:
+                in_p  = self._loop_state[deck].get("in",  0.3)
+                out_p = self._loop_state[deck].get("out", 0.7)
+                self._waveforms[deck].set_loop(in_p, out_p)
+            else:
+                self._waveforms[deck].clear_loop()
+        logger.info(f"Deck {deck}: loop {'on' if active else 'off'}")
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  Feature 6: Hot Cue Persistence
+    # ════════════════════════════════════════════════════════════════════════
+    def _hot_cue_dir(self) -> str:
+        d = os.path.join(self._app_dir, "hot_cues")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def _track_key(self, path: str) -> str:
+        import hashlib as _hl
+        return _hl.md5(path.encode()).hexdigest()[:12]
+
+    def _save_hot_cues(self, track_path: str, deck: int) -> None:
+        key = self._track_key(track_path)
+        cues = self._hot_cues.get(key, {})
+        out = os.path.join(self._hot_cue_dir(), f"{key}.json")
+        try:
+            with open(out, "w") as f:
+                json.dump({"track": track_path, "cues": cues}, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Hot cue save failed: {e}")
+
+    def _load_hot_cues(self, track_path: str, deck: int) -> None:
+        key = self._track_key(track_path)
+        src = os.path.join(self._hot_cue_dir(), f"{key}.json")
+        if os.path.exists(src):
+            try:
+                with open(src) as f:
+                    data = json.load(f)
+                self._hot_cues[key] = data.get("cues", {})
+                logger.info(f"Hot cues loaded for deck {deck}: {len(self._hot_cues[key])} cues")
+            except Exception as e:
+                logger.warning(f"Hot cue load failed: {e}")
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  Feature 8: Crossfader Curve
+    # ════════════════════════════════════════════════════════════════════════
+    def _set_xfade_curve(self, curve_id: str) -> None:
+        self._xfade_curve = curve_id
+        if hasattr(self, "_curve_preview"):
+            self._curve_preview.set_curve(curve_id)
+        # Update button checked states
+        for btn in getattr(self, "_xfade_curve_btns", []):
+            btn.setChecked(btn.property("curveId") == curve_id)
+        sb = self.statusBar()
+        if sb:
+            sb.showMessage(f"Crossfader curve: {curve_id}", 2500)
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  Feature 10: Theme Export / Import
+    # ════════════════════════════════════════════════════════════════════════
+    _BUILTIN_THEMES = {
+        "Dark Amber (Default)": {"accent": "#ff8800", "secondary": "#ffaa22"},
+        "Dark Blue":            {"accent": "#4488ff", "secondary": "#66aaff"},
+        "Red Alert":            {"accent": "#dd3333", "secondary": "#ff5555"},
+        "Emerald":              {"accent": "#44cc66", "secondary": "#66ee88"},
+        "Purple Haze":          {"accent": "#aa44ff", "secondary": "#cc77ff"},
+    }
+
+    def _apply_theme_preset(self, name: str) -> None:
+        theme = self._BUILTIN_THEMES.get(name)
+        if not theme:
+            return
+        accent = theme["accent"]
+        self._accent_color = accent
+        new_style = HARDWARE_STYLESHEET.replace("#ff8800", accent).replace(
+            "#ffaa22", theme["secondary"])
+        self.setStyleSheet(new_style)
+        self._config["accent_color"] = accent
+        self._config["theme_name"]   = name
+
+    @pyqtSlot()
+    def _export_theme(self) -> None:
+        themes_dir = os.path.join(self._app_dir, "themes")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Theme", themes_dir, "JSON Theme (*.json)")
+        if not path:
+            return
+        theme_data = {
+            "accent":    self._accent_color,
+            "secondary": self._config.get("secondary_color", "#ffaa22"),
+            "name":      self._config.get("theme_name", "Custom"),
+        }
+        try:
+            with open(path, "w") as f:
+                json.dump(theme_data, f, indent=2)
+            sb = self.statusBar()
+            if sb:
+                sb.showMessage(f"Theme exported: {os.path.basename(path)}", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "Export Failed", str(e))
+
+    @pyqtSlot()
+    def _import_theme(self) -> None:
+        themes_dir = os.path.join(self._app_dir, "themes")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import Theme", themes_dir, "JSON Theme (*.json)")
+        if not path:
+            return
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            accent    = data.get("accent",    "#ff8800")
+            secondary = data.get("secondary", "#ffaa22")
+            self._accent_color = accent
+            new_style = HARDWARE_STYLESHEET.replace("#ff8800", accent).replace(
+                "#ffaa22", secondary)
+            self.setStyleSheet(new_style)
+            self._config["accent_color"]     = accent
+            self._config["secondary_color"]  = secondary
+            sb = self.statusBar()
+            if sb:
+                sb.showMessage(f"Theme imported: {data.get('name', 'Custom')}", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "Import Failed", str(e))
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  Feature 11: Keyboard Shortcut Editor
+    # ════════════════════════════════════════════════════════════════════════
+    _DEFAULT_SHORTCUTS = {
+        "Open Track":       "Ctrl+O",
+        "Play / Pause":     "Space",
+        "CUE Deck A":       "Ctrl+Left",
+        "CUE Deck B":       "Ctrl+Right",
+        "Full Screen":      "F11",
+        "Refresh Devices":  "F5",
+        "Loop In":          "I",
+        "Loop Out":         "O",
+        "Record Toggle":    "Ctrl+R",
+        "BPM Nudge -0.1":  "Shift+Left",
+        "BPM Nudge +0.1":  "Shift+Right",
+    }
+
+    def _populate_shortcut_table(self) -> None:
+        saved = self._config.get("shortcuts", {})
+        self._shortcut_table.setRowCount(0)
+        for action, default_key in self._DEFAULT_SHORTCUTS.items():
+            key = saved.get(action, default_key)
+            row = self._shortcut_table.rowCount()
+            self._shortcut_table.insertRow(row)
+            self._shortcut_table.setItem(row, 0, QTableWidgetItem(action))
+            self._shortcut_table.setItem(row, 1, QTableWidgetItem(key))
+
+    @pyqtSlot()
+    def _remap_shortcut(self) -> None:
+        row = self._shortcut_table.currentRow()
+        if row < 0:
+            return
+        action_item = self._shortcut_table.item(row, 0)
+        if not action_item:
+            return
+        action = action_item.text()
+        new_key, ok = QInputDialog.getText(
+            self, "Remap Shortcut",
+            f"Enter new key sequence for:\n{action}\n(e.g. Ctrl+Shift+P)"
+        )
+        if ok and new_key.strip():
+            self._shortcut_table.setItem(row, 1, QTableWidgetItem(new_key.strip()))
+            if "shortcuts" not in self._config:
+                self._config["shortcuts"] = {}
+            self._config["shortcuts"][action] = new_key.strip()
+            sb = self.statusBar()
+            if sb:
+                sb.showMessage(f"Shortcut updated: {action} → {new_key.strip()}", 3000)
+
+    @pyqtSlot()
+    def _reset_shortcuts(self) -> None:
+        self._config.pop("shortcuts", None)
+        self._populate_shortcut_table()
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  Feature 12: Per-deck BPM controls
+    # ════════════════════════════════════════════════════════════════════════
+    def _on_deck_bpm_changed(self, deck: int, value: float) -> None:
+        self._deck_bpm[deck] = value
+        # Update global BPM display if deck 1 or 2 is "master"
+        if deck in (1, 2) and self._bpm_display:
+            self._bpm_display.setText(f"{value:.1f}")
+        logger.debug(f"Deck {deck} BPM → {value:.1f}")
+
+    def _nudge_deck_bpm(self, deck: int, delta: float) -> None:
+        current = self._deck_bpm.get(deck, 120.0)
+        new_val = max(60.0, min(220.0, current + delta))
+        self._deck_bpm[deck] = new_val
+        if deck in self._deck_bpm_spins:
+            self._deck_bpm_spins[deck].setValue(new_val)
