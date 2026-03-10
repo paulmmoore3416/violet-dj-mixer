@@ -1,0 +1,31 @@
+{
+  "profile_name": "Akai APC Mini",
+  "controller_id": "default",
+  "controller_type": "akai",
+  "description": "Akai APC Mini — grid pad controller repurposed for DJ use",
+  "midi_channel": 1,
+  "mappings": {
+    "48": "hot_cue_1_deck_a",
+    "49": "hot_cue_2_deck_a",
+    "50": "hot_cue_3_deck_a",
+    "51": "hot_cue_4_deck_a",
+    "56": "hot_cue_1_deck_b",
+    "57": "hot_cue_2_deck_b",
+    "58": "hot_cue_3_deck_b",
+    "59": "hot_cue_4_deck_b",
+    "64": "play_pause_deck_a",
+    "65": "play_pause_deck_b",
+    "66": "cue_deck_a",
+    "67": "cue_deck_b",
+    "68": "sync_deck_a",
+    "69": "sync_deck_b",
+    "70": "loop_in_deck_a",
+    "71": "loop_out_deck_a",
+    "72": "loop_in_deck_b",
+    "73": "loop_out_deck_b",
+    "74": "fx_1_on",
+    "75": "fx_2_on",
+    "76": "fx_3_on",
+    "77": "headphone_cue_mix"
+  }
+}

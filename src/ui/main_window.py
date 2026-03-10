@@ -5,13 +5,22 @@ Pioneer DJM-800 + DJS-1000 Hardware-Inspired Interface
 
 from __future__ import annotations
 
+import json
+import os
+import time
+from datetime import datetime
+
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QLabel, QPushButton, QSlider, QDial,
-                             QGridLayout, QComboBox, QSpinBox, QDoubleSpinBox,
+                             QGridLayout, QComboBox, QSpinBox,
                              QCheckBox, QProgressBar, QFrame, QMessageBox,
-                             QFileDialog)
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QColor, QLinearGradient, QPainter
+                             QFileDialog, QListWidget, QListWidgetItem,
+                             QMenu, QTableWidget, QTableWidgetItem,
+                             QHeaderView, QSplitter, QInputDialog,
+                             QAbstractItemView)
+from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSlot
+from PyQt6.QtGui import (QFont, QColor, QLinearGradient, QPainter,
+                         QShortcut, QKeySequence, QAction)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -651,13 +660,52 @@ def _spinbox(value: int, lo=0, hi=9999, step=1) -> QSpinBox:
 class VioletDJMixer(QMainWindow):
     """Violet DJ Mixer — hardware-inspired Pioneer DJM-800/DJS-1000 UI."""
 
-    VERSION = "1.1.0"
+    VERSION = "2.1.0"
+
+    # Accent colour options for Enhancement 7
+    ACCENT_COLORS = {
+        "Amber (Default)": "#ff8800",
+        "Blue":            "#4488ff",
+        "Green":           "#44cc66",
+        "Red":             "#dd3333",
+        "Purple":          "#aa44ff",
+    }
+
+    # Max recent tracks stored (Enhancement 1)
+    MAX_RECENT = 10
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"Violet DJ Mixer v{self.VERSION} — Professional Digital Mixing Board")
         self.setGeometry(100, 60, 1700, 960)
         self.setMinimumSize(1400, 800)
+
+        # ── Runtime state ────────────────────────────────────────────────────
+        self._app_dir = os.path.expanduser("~/.violet_dj")
+        os.makedirs(self._app_dir, exist_ok=True)
+        os.makedirs(os.path.join(self._app_dir, "sessions"), exist_ok=True)
+
+        # Enhancement 1 – recent tracks
+        self._recent_tracks: list[str] = self._load_recent_tracks()
+
+        # Enhancement 3 – tap tempo
+        self._tap_times: list[float] = []
+        self._bpm_display: QLabel | None = None
+
+        # Enhancement 5 – per-deck track labels (filled in create_mixer_panel)
+        self._deck_labels: dict[int, QLabel] = {}
+
+        # MIDI→UI control references (populated during mixer panel construction)
+        # keyed by action name from ControllerManager.MAPPABLE_ACTIONS
+        self._midi_controls: dict[str, QSlider | QDial | QPushButton] = {}
+
+        # Enhancement 6 – session timer
+        self._session_start = time.time()
+
+        # Enhancement 10 – persisted config
+        self._config = self._load_config()
+
+        self._accent_color: str = self._config.get("accent_color", "#ff8800")
 
         self.setStyleSheet(HARDWARE_STYLESHEET)
         font = QFont()
@@ -676,19 +724,31 @@ class VioletDJMixer(QMainWindow):
         self.tabs = QTabWidget()
         root.addWidget(self.tabs)
 
-        self.tabs.addTab(self.create_mixer_panel(),  "  Mixer  ")
-        self.tabs.addTab(self.create_sampler_panel(), "  Sampler  ")
-        self.tabs.addTab(self.create_effects_panel(), "  Effects  ")
-        self.tabs.addTab(self.create_device_panel(),  "  Devices  ")
+        self.tabs.addTab(self.create_mixer_panel(),      "  Mixer  ")
+        self.tabs.addTab(self.create_sampler_panel(),    "  Sampler  ")
+        self.tabs.addTab(self.create_effects_panel(),    "  Effects  ")
+        self.tabs.addTab(self.create_queue_panel(),      "  Queue  ")
+        self.tabs.addTab(self.create_device_panel(),     "  Devices  ")
         self.tabs.addTab(self.create_controller_panel(), "  Controllers  ")
-        self.tabs.addTab(self.create_settings_panel(), "  Settings  ")
+        self.tabs.addTab(self.create_settings_panel(),   "  Settings  ")
 
         sb = self.statusBar()
         if sb:
             sb.showMessage(f"Violet DJ Mixer v{self.VERSION}  ·  Ready  ·  No devices connected")
 
+        # Enhancement 6 – clock timer updates status bar every second
+        self._clock_timer = QTimer(self)
+        self._clock_timer.timeout.connect(self._update_clock)
+        self._clock_timer.start(1000)
+
         self.device_detector = None
         self.start_device_detection()
+
+        # Enhancement 2 – keyboard shortcuts
+        self._setup_keyboard_shortcuts()
+
+        # Wire MIDI action signals → UI controls
+        self._wire_controller_actions()
 
         logger.info(f"Violet DJ Mixer v{self.VERSION} initialized")
 
@@ -697,26 +757,41 @@ class VioletDJMixer(QMainWindow):
         mb = self.menuBar()
         assert mb is not None
         fm = mb.addMenu("File")
-        fm.addAction("Open Track",    self.open_track)
-        fm.addAction("Open Playlist", self.open_playlist)
+        assert fm is not None
+        fm.addAction("Open Track  [Ctrl+O]", self.open_track)
+        fm.addAction("Open Playlist",        self.open_playlist)
+        fm.addSeparator()
+
+        # Enhancement 1 – Recent Files submenu
+        self._recent_menu = QMenu("Recent Tracks", self)
+        self._rebuild_recent_menu()
+        fm.addMenu(self._recent_menu)
+        fm.addSeparator()
+
+        fm.addAction("View Session Log", self.show_session_log)
         fm.addSeparator()
         fm.addAction("Exit", self.close)
 
         em = mb.addMenu("Edit")
+        assert em is not None
         em.addAction("Preferences",        self.show_preferences)
         em.addAction("Controller Mapping", self.show_controller_mapping)
 
         vm = mb.addMenu("View")
+        assert vm is not None
         vm.addAction("Toggle Visualization")
-        vm.addAction("Full Screen")
+        vm.addAction("Full Screen  [F11]", self._toggle_fullscreen)
 
         dm = mb.addMenu("Devices")
+        assert dm is not None
         dm.addAction("Refresh Devices", self.refresh_devices)
         dm.addAction("Audio Settings",  self.show_audio_settings)
 
         hm = mb.addMenu("Help")
-        hm.addAction("Documentation", self.show_documentation)
-        hm.addAction("About",         self.show_about)
+        assert hm is not None
+        hm.addAction("Keyboard Shortcuts", self.show_shortcuts)
+        hm.addAction("Documentation",      self.show_documentation)
+        hm.addAction("About",              self.show_about)
 
     # ════════════════════════════════════════════════════════════════════════
     #  MIXER TAB  (DJM-800 style 4-channel layout)
@@ -818,6 +893,18 @@ class VioletDJMixer(QMainWindow):
         num_lbl.setFixedHeight(22)
         lo.addWidget(num_lbl)
 
+        # Enhancement 5 – track info label for this deck
+        deck_lbl = QLabel("— No Track —")
+        deck_lbl.setObjectName("deckTrackLabel")
+        deck_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        deck_lbl.setStyleSheet(
+            "color:#556677; font-size:8px; background:#0a0f14; "
+            "border:1px solid #1a2530; border-radius:3px; padding:2px 4px;"
+        )
+        deck_lbl.setMaximumWidth(120)
+        lo.addWidget(deck_lbl)
+        self._deck_labels[ch] = deck_lbl
+
         lo.addWidget(_hline())
 
         # TRIM knob
@@ -826,12 +913,15 @@ class VioletDJMixer(QMainWindow):
 
         lo.addWidget(_hline())
 
-        # EQ knobs
+        # EQ knobs — store refs for MIDI control (decks 1&2 only for A/B)
+        deck_letter = "a" if ch <= 2 else "b"
         eq_lo = QVBoxLayout()
         eq_lo.setSpacing(2)
         for eq_name, eq_val in (("HI", 50), ("MID", 50), ("LOW", 50)):
-            klo, _ = _knob_col(eq_name, eq_val, 44)
+            klo, eq_knob = _knob_col(eq_name, eq_val, 44)
             eq_lo.addLayout(klo)
+            action_key = f"eq_{eq_name.lower()}_deck_{deck_letter}"
+            self._midi_controls[action_key] = eq_knob
         lo.addLayout(eq_lo)
 
         lo.addWidget(_section_label("EQ"))
@@ -856,12 +946,29 @@ class VioletDJMixer(QMainWindow):
 
         lo.addWidget(_hline())
 
-        # CUE button
-        cue_btn = _btn("CUE", "btnCue", checkable=True, min_h=38)
-        cue_btn.setMinimumWidth(9999)  # full width
-        lo.addWidget(cue_btn)
+        # Enhancement 17 – MUTE + CUE row — store CUE for MIDI
+        mute_cue_row = QHBoxLayout()
+        mute_cue_row.setSpacing(4)
+        mute_btn = QPushButton("MUTE")
+        mute_btn.setObjectName("btnMute")
+        mute_btn.setCheckable(True)
+        mute_btn.setMinimumHeight(38)
+        mute_btn.setStyleSheet("""
+            QPushButton { background:#1a0808; color:#883333;
+                border:1px solid #3a1a1a; border-radius:4px;
+                font-size:9px; font-weight:bold; }
+            QPushButton:checked { background:#cc2222; color:#ffffff;
+                border-color:#ff4444; }
+            QPushButton:hover { border-color:#993333; }
+        """)
+        mute_cue_row.addWidget(mute_btn, 1)
 
-        # Fader
+        cue_btn = _btn("CUE", "btnCue", checkable=True, min_h=38)
+        self._midi_controls[f"cue_deck_{deck_letter}"] = cue_btn
+        mute_cue_row.addWidget(cue_btn, 1)
+        lo.addLayout(mute_cue_row)
+
+        # Fader — store ref for MIDI volume control
         fader_wrap = QHBoxLayout()
         fader_wrap.setContentsMargins(0, 4, 0, 0)
         fader = QSlider(Qt.Orientation.Vertical)
@@ -870,6 +977,7 @@ class VioletDJMixer(QMainWindow):
         fader.setValue(80)
         fader.setMinimumHeight(180)
         fader.setMaximumWidth(50)
+        self._midi_controls[f"volume_deck_{deck_letter}"] = fader
         fader_wrap.addStretch()
         fader_wrap.addWidget(fader)
         fader_wrap.addStretch()
@@ -939,17 +1047,19 @@ class VioletDJMixer(QMainWindow):
 
         lo.addWidget(_hline())
 
-        # BPM
+        # Enhancement 3 – BPM with tap tempo wiring
         lo.addWidget(_section_label("BPM"))
-        bpm_lbl = QLabel("120")
+        bpm_lbl = QLabel("120.0")
         bpm_lbl.setObjectName("bpmValue")
         bpm_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lo.addWidget(bpm_lbl)
+        self._bpm_display = bpm_lbl  # store reference for tap updates
 
-        ms_lbl = QLabel("2000 ms")
+        ms_lbl = QLabel("500 ms")
         ms_lbl.setObjectName("msValue")
         ms_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lo.addWidget(ms_lbl)
+        self._ms_display = ms_lbl
 
         # Beat arrows
         beat_row = QHBoxLayout()
@@ -967,10 +1077,11 @@ class VioletDJMixer(QMainWindow):
 
         lo.addWidget(_hline())
 
-        # TAP + CUE
+        # TAP + CUE — wire TAP to Enhancement 3 handler
         tap_cue_row = QHBoxLayout()
         tap_cue_row.setSpacing(8)
         tap_btn = _btn("TAP", "btnTap", min_w=56, min_h=56)
+        tap_btn.clicked.connect(self._on_tap_tempo)
         cue_btn = _btn("CUE", "btnCue", checkable=True, min_w=56, min_h=56)
         tap_cue_row.addStretch()
         tap_cue_row.addWidget(tap_btn)
@@ -992,6 +1103,7 @@ class VioletDJMixer(QMainWindow):
         master_fader.setMinimumHeight(120)
         master_row.addStretch()
         master_row.addWidget(master_fader)
+        self._midi_controls["master_volume"] = master_fader
 
         right_knobs = QVBoxLayout()
         right_knobs.setSpacing(4)
@@ -1031,6 +1143,7 @@ class VioletDJMixer(QMainWindow):
         xfader.setMaximum(100)
         xfader.setValue(50)
         lo.addWidget(xfader, 1)
+        self._midi_controls["crossfader"] = xfader
 
         b_lbl = QLabel("B  》")
         b_lbl.setStyleSheet("color:#ff8800; font-size:13px; font-weight:bold; background:transparent;")
@@ -1265,62 +1378,199 @@ class VioletDJMixer(QMainWindow):
         return root
 
     # ════════════════════════════════════════════════════════════════════════
-    #  EFFECTS TAB
+    #  EFFECTS TAB  —  Enhancement 18: Effects Chain Panel
     # ════════════════════════════════════════════════════════════════════════
+
+    _EFFECT_DEFS = [
+        ("Echo",       "delay/repeat",   "#004455"),
+        ("Reverb",     "room/space",     "#003344"),
+        ("Chorus",     "shimmer/width",  "#002244"),
+        ("Flanger",    "sweep/comb",     "#001133"),
+        ("Phaser",     "phase shift",    "#220044"),
+        ("Distortion", "overdrive/clip", "#330000"),
+        ("Filter",     "cutoff/resonance","#003300"),
+        ("Delay",      "multi-tap",      "#002233"),
+    ]
+
     def create_effects_panel(self) -> QWidget:
         root = QWidget()
         root.setStyleSheet("background:transparent;")
-        lo = QVBoxLayout(root)
-        lo.setContentsMargins(4, 4, 4, 4)
-        lo.setSpacing(8)
+        outer = QHBoxLayout(root)
+        outer.setContentsMargins(4, 4, 4, 4)
+        outer.setSpacing(8)
 
-        main_frame = QFrame()
-        main_frame.setObjectName("panelLeft")
-        main_lo = QVBoxLayout(main_frame)
-        main_lo.setContentsMargins(16, 14, 16, 14)
-        main_lo.setSpacing(8)
+        # ── Left: chain list ─────────────────────────────────────────────
+        chain_frame = QFrame()
+        chain_frame.setObjectName("panelLeft")
+        chain_frame.setMaximumWidth(220)
+        chain_lo = QVBoxLayout(chain_frame)
+        chain_lo.setContentsMargins(10, 10, 10, 10)
+        chain_lo.setSpacing(6)
+        chain_lo.addWidget(_panel_title("FX Chain  (A → B)"))
 
-        main_lo.addWidget(_panel_title("Beat Effects"))
+        self._fx_chain_list = QListWidget()
+        self._fx_chain_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self._fx_chain_list.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self._fx_chain_list.setStyleSheet("""
+            QListWidget { background:#0d0d0d; color:#aaaaaa;
+                border:1px solid #2a2a2a; font-size:10px; }
+            QListWidget::item { padding:6px 8px; border-bottom:1px solid #1a1a1a; }
+            QListWidget::item:selected { background:#1a3050; color:#fff; }
+        """)
+        self._fx_chain_list.currentRowChanged.connect(self._fx_chain_selection_changed)
+        chain_lo.addWidget(self._fx_chain_list)
 
-        effects = [
-            ("Echo",       "delay/repeat"),
-            ("Reverb",     "room/space"),
-            ("Chorus",     "shimmer/width"),
-            ("Flanger",    "sweep/comb"),
-            ("Phaser",     "phase shift"),
-            ("Distortion", "overdrive/clip"),
-            ("Delay",      "multi-tap"),
+        chain_btn_row = QHBoxLayout()
+        chain_btn_row.setSpacing(4)
+        for txt, slot in (("▲", self._fx_chain_move_up),
+                          ("▼", self._fx_chain_move_down),
+                          ("✕", self._fx_chain_remove)):
+            b = QPushButton(txt)
+            b.setFixedSize(QSize(28, 28))
+            b.clicked.connect(slot)
+            chain_btn_row.addWidget(b)
+        chain_btn_row.addStretch()
+        chain_lo.addLayout(chain_btn_row)
+        outer.addWidget(chain_frame)
+
+        # ── Centre: available effects to add ─────────────────────────────
+        lib_frame = QFrame()
+        lib_frame.setObjectName("panelLeft")
+        lib_frame.setMaximumWidth(200)
+        lib_lo = QVBoxLayout(lib_frame)
+        lib_lo.setContentsMargins(10, 10, 10, 10)
+        lib_lo.setSpacing(6)
+        lib_lo.addWidget(_panel_title("Effect Library"))
+
+        for name, hint, _ in self._EFFECT_DEFS:
+            add_btn = QPushButton(f"  + {name}")
+            add_btn.setStyleSheet(
+                "QPushButton { background:#111; color:#aaa; border:1px solid #2a2a2a; "
+                "border-radius:3px; text-align:left; padding:5px 8px; font-size:10px; }"
+                "QPushButton:hover { background:#1a1a1a; color:#fff; }"
+            )
+            add_btn.setProperty("effectName", name)
+            add_btn.clicked.connect(lambda _checked, n=name: self._fx_chain_add(n))
+            lib_lo.addWidget(add_btn)
+        lib_lo.addStretch()
+        outer.addWidget(lib_frame)
+
+        # ── Right: parameter editor for selected chain effect ─────────────
+        param_frame = QFrame()
+        param_frame.setObjectName("panelLeft")
+        param_lo = QVBoxLayout(param_frame)
+        param_lo.setContentsMargins(16, 14, 16, 14)
+        param_lo.setSpacing(10)
+
+        self._fx_param_title = QLabel("— Select an effect —")
+        self._fx_param_title.setObjectName("effectName")
+        self._fx_param_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        param_lo.addWidget(self._fx_param_title)
+
+        self._fx_enabled_chk = QCheckBox("Enabled")
+        self._fx_enabled_chk.setChecked(True)
+        param_lo.addWidget(self._fx_enabled_chk)
+
+        param_lo.addWidget(_hline())
+
+        param_defs = [
+            ("Mix",       0, 100, 50),
+            ("Time / Rate", 0, 100, 35),
+            ("Depth",     0, 100, 60),
+            ("Feedback",  0, 100, 30),
+            ("Wet / Dry", 0, 100, 50),
         ]
+        self._fx_param_sliders: dict[str, QSlider] = {}
+        for p_name, p_min, p_max, p_val in param_defs:
+            row = QHBoxLayout()
+            lbl = QLabel(p_name)
+            lbl.setMinimumWidth(90)
+            row.addWidget(lbl)
+            sl = QSlider(Qt.Orientation.Horizontal)
+            sl.setMinimum(p_min)
+            sl.setMaximum(p_max)
+            sl.setValue(p_val)
+            sl.setMinimumWidth(160)
+            row.addWidget(sl)
+            val_lbl = QLabel(str(p_val))
+            val_lbl.setMinimumWidth(28)
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            sl.valueChanged.connect(lambda v, l=val_lbl: l.setText(str(v)))
+            row.addWidget(val_lbl)
+            param_lo.addLayout(row)
+            self._fx_param_sliders[p_name] = sl
 
-        for name, hint in effects:
-            row_frame = QFrame()
-            row_frame.setObjectName("glassCard")
-            row_lo = QHBoxLayout(row_frame)
-            row_lo.setContentsMargins(12, 8, 12, 8)
-            row_lo.setSpacing(12)
+        param_lo.addWidget(_hline())
 
-            chk = QCheckBox(name)
-            chk.setMinimumWidth(100)
-            row_lo.addWidget(chk)
+        # E19 – BPM sync indicator inside FX panel
+        sync_row = QHBoxLayout()
+        sync_row.addWidget(_section_label("BPM Sync:"))
+        self._sync_badge = QLabel("● NOT SYNCED")
+        self._sync_badge.setStyleSheet(
+            "color:#884422; font-size:10px; font-weight:bold; background:transparent;"
+        )
+        sync_row.addWidget(self._sync_badge)
+        sync_row.addStretch()
+        sync_toggle = QPushButton("Sync Decks")
+        sync_toggle.setCheckable(True)
+        sync_toggle.toggled.connect(self._fx_toggle_sync)
+        sync_row.addWidget(sync_toggle)
+        param_lo.addLayout(sync_row)
 
-            hl = QLabel(hint)
-            hl.setMinimumWidth(90)
-            row_lo.addWidget(hl)
+        param_lo.addStretch()
+        outer.addWidget(param_frame, 1)
 
-            for param in ("Mix", "Time"):
-                row_lo.addWidget(QLabel(f"{param}:"))
-                sl = QSlider(Qt.Orientation.Horizontal)
-                sl.setMaximum(100)
-                sl.setValue(50 if param == "Mix" else 30)
-                sl.setMinimumWidth(110)
-                row_lo.addWidget(sl)
-
-            row_lo.addStretch()
-            main_lo.addWidget(row_frame)
-
-        lo.addWidget(main_frame)
-        lo.addStretch()
         return root
+
+    def _fx_chain_add(self, name: str):
+        self._fx_chain_list.addItem(f"◆  {name}")
+        self._fx_chain_list.setCurrentRow(self._fx_chain_list.count() - 1)
+
+    @pyqtSlot()
+    def _fx_chain_move_up(self):
+        row = self._fx_chain_list.currentRow()
+        if row > 0:
+            item = self._fx_chain_list.takeItem(row)
+            self._fx_chain_list.insertItem(row - 1, item)
+            self._fx_chain_list.setCurrentRow(row - 1)
+
+    @pyqtSlot()
+    def _fx_chain_move_down(self):
+        row = self._fx_chain_list.currentRow()
+        if 0 <= row < self._fx_chain_list.count() - 1:
+            item = self._fx_chain_list.takeItem(row)
+            self._fx_chain_list.insertItem(row + 1, item)
+            self._fx_chain_list.setCurrentRow(row + 1)
+
+    @pyqtSlot()
+    def _fx_chain_remove(self):
+        row = self._fx_chain_list.currentRow()
+        if row >= 0:
+            self._fx_chain_list.takeItem(row)
+
+    @pyqtSlot(int)
+    def _fx_chain_selection_changed(self, row: int):
+        if row < 0:
+            return
+        item = self._fx_chain_list.item(row)
+        if item:
+            name = item.text().replace("◆  ", "").strip()
+            self._fx_param_title.setText(name)
+
+    # E19 – BPM sync badge toggle
+    @pyqtSlot(bool)
+    def _fx_toggle_sync(self, synced: bool):
+        if synced:
+            self._sync_badge.setText("● SYNCED")
+            self._sync_badge.setStyleSheet(
+                "color:#44cc66; font-size:10px; font-weight:bold; background:transparent;"
+            )
+        else:
+            self._sync_badge.setText("● NOT SYNCED")
+            self._sync_badge.setStyleSheet(
+                "color:#884422; font-size:10px; font-weight:bold; background:transparent;"
+            )
+        logger.info(f"BPM sync: {'on' if synced else 'off'}")
 
     # ════════════════════════════════════════════════════════════════════════
     #  DEVICES TAB
@@ -1365,42 +1615,311 @@ class VioletDJMixer(QMainWindow):
         return root
 
     # ════════════════════════════════════════════════════════════════════════
-    #  CONTROLLERS TAB
+    #  CONTROLLERS TAB  (E14 · E15 · E16 · E20)
     # ════════════════════════════════════════════════════════════════════════
     def create_controller_panel(self) -> QWidget:
         root = QWidget()
         root.setStyleSheet("background:transparent;")
-        lo = QVBoxLayout(root)
-        lo.setContentsMargins(4, 4, 4, 4)
-        lo.setSpacing(10)
+        root_lo = QVBoxLayout(root)
+        root_lo.setContentsMargins(4, 4, 4, 4)
+        root_lo.setSpacing(8)
 
-        panel = QFrame()
-        panel.setObjectName("panelLeft")
-        panel_lo = QVBoxLayout(panel)
-        panel_lo.setContentsMargins(16, 14, 16, 14)
-        panel_lo.setSpacing(10)
+        # ── Top bar: port selector + actions ─────────────────────────────
+        top_frame = QFrame()
+        top_frame.setObjectName("glassCard")
+        top_lo = QHBoxLayout(top_frame)
+        top_lo.setContentsMargins(12, 8, 12, 8)
+        top_lo.setSpacing(8)
 
-        panel_lo.addWidget(_panel_title("MIDI Controller Configuration"))
+        top_lo.addWidget(_section_label("MIDI Port:"))
+        self._ctrl_port_combo = QComboBox()
+        self._ctrl_port_combo.setMinimumWidth(220)
+        self._ctrl_port_combo.setStyleSheet(
+            "QComboBox { background:#0d0d0d; color:#cccccc; border:1px solid #2a2a2a; "
+            "border-radius:3px; padding:3px 6px; }"
+        )
+        top_lo.addWidget(self._ctrl_port_combo)
 
-        ctrl_row = QHBoxLayout()
-        ctrl_row.setSpacing(8)
-        ctrl_row.addWidget(QLabel("Controller:"))
-        combo = _combo(["— Select Controller —"])
-        ctrl_row.addWidget(combo)
-        ctrl_row.addWidget(QPushButton("Detect Devices"))
-        ctrl_row.addStretch()
-        panel_lo.addLayout(ctrl_row)
+        detect_btn = QPushButton("Detect")
+        detect_btn.setFixedWidth(70)
+        detect_btn.clicked.connect(self._ctrl_detect_ports)
+        top_lo.addWidget(detect_btn)
 
-        panel_lo.addWidget(_panel_title("MIDI Mapping"))
-        mapping = QLabel("  Drag & drop MIDI controls to map them\n\n  No mappings configured")
-        mapping.setObjectName("mappingArea")
-        mapping.setMinimumHeight(280)
-        mapping.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        panel_lo.addWidget(mapping)
+        connect_btn = QPushButton("Connect")
+        connect_btn.setFixedWidth(70)
+        connect_btn.clicked.connect(self._ctrl_connect)
+        top_lo.addWidget(connect_btn)
 
-        lo.addWidget(panel)
-        lo.addStretch()
+        top_lo.addSpacing(16)
+        top_lo.addWidget(_section_label("Preset:"))
+        self._preset_combo = QComboBox()
+        self._preset_combo.setMinimumWidth(180)
+        self._preset_combo.addItem("— load preset —")
+        self._preset_combo.addItems(list(self._ctrl_manager().BUILTIN_PRESETS.keys()))
+        self._preset_combo.setStyleSheet(
+            "QComboBox { background:#0d0d0d; color:#cccccc; border:1px solid #2a2a2a; "
+            "border-radius:3px; padding:3px 6px; }"
+        )
+        top_lo.addWidget(self._preset_combo)
+
+        load_preset_btn = QPushButton("Load")
+        load_preset_btn.setFixedWidth(55)
+        load_preset_btn.clicked.connect(self._ctrl_load_preset)
+        top_lo.addWidget(load_preset_btn)
+
+        top_lo.addStretch()
+
+        # Enhancement 16 – MIDI Learn toggle
+        self._learn_btn = QPushButton("MIDI Learn")
+        self._learn_btn.setCheckable(True)
+        self._learn_btn.setFixedWidth(90)
+        self._learn_btn.setStyleSheet("""
+            QPushButton { background:#1a1a1a; color:#888888;
+                border:1px solid #333; border-radius:4px; padding:5px; }
+            QPushButton:checked { background:#cc5500; color:#ffffff;
+                border-color:#ff6600; }
+        """)
+        self._learn_btn.toggled.connect(self._ctrl_toggle_learn)
+        top_lo.addWidget(self._learn_btn)
+
+        root_lo.addWidget(top_frame)
+
+        # ── Splitter: mapping table (left) + action picker (right) ───────
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        # Mapping table – E14
+        table_frame = QFrame()
+        table_frame.setObjectName("panelLeft")
+        table_lo = QVBoxLayout(table_frame)
+        table_lo.setContentsMargins(10, 10, 10, 10)
+        table_lo.setSpacing(6)
+        table_lo.addWidget(_panel_title("MIDI Mappings  (CC → Action)"))
+
+        self._mapping_table = QTableWidget(0, 3)
+        self._mapping_table.setHorizontalHeaderLabels(["CC", "Action", "Controller"])
+        self._mapping_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self._mapping_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._mapping_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._mapping_table.setAlternatingRowColors(True)
+        self._mapping_table.setStyleSheet("""
+            QTableWidget {
+                background:#0d0d0d; color:#cccccc;
+                border:1px solid #2a2a2a; gridline-color:#1a1a1a;
+                font-size:10px;
+            }
+            QTableWidget::item:selected { background:#1a3050; color:#ffffff; }
+            QTableWidget::item:alternate { background:#111111; }
+            QHeaderView::section {
+                background:#1a1a1a; color:#888888; border:none;
+                border-bottom:1px solid #2a2a2a; padding:4px;
+                font-size:9px; font-weight:bold; letter-spacing:1px;
+            }
+        """)
+        table_lo.addWidget(self._mapping_table)
+
+        map_btn_row = QHBoxLayout()
+        map_btn_row.setSpacing(6)
+        add_map_btn = QPushButton("+ Add Row")
+        add_map_btn.clicked.connect(self._ctrl_add_mapping_row)
+        map_btn_row.addWidget(add_map_btn)
+        del_map_btn = QPushButton("Remove")
+        del_map_btn.clicked.connect(self._ctrl_remove_mapping_row)
+        map_btn_row.addWidget(del_map_btn)
+        clear_map_btn = QPushButton("Clear All")
+        clear_map_btn.clicked.connect(self._ctrl_clear_mappings)
+        map_btn_row.addWidget(clear_map_btn)
+        map_btn_row.addStretch()
+        save_prof_btn = QPushButton("Save Profile")
+        save_prof_btn.clicked.connect(self._ctrl_save_profile)
+        map_btn_row.addWidget(save_prof_btn)
+        load_prof_btn = QPushButton("Load Profile")
+        load_prof_btn.clicked.connect(self._ctrl_load_profile)
+        map_btn_row.addWidget(load_prof_btn)
+        table_lo.addLayout(map_btn_row)
+
+        splitter.addWidget(table_frame)
+
+        # Action list – E15 (right pane)
+        action_frame = QFrame()
+        action_frame.setObjectName("panelLeft")
+        action_frame.setMaximumWidth(260)
+        action_lo = QVBoxLayout(action_frame)
+        action_lo.setContentsMargins(10, 10, 10, 10)
+        action_lo.setSpacing(6)
+        action_lo.addWidget(_panel_title("Available Actions"))
+
+        self._action_list = QListWidget()
+        self._action_list.setStyleSheet("""
+            QListWidget { background:#0d0d0d; color:#aaaaaa;
+                border:1px solid #2a2a2a; font-size:10px; }
+            QListWidget::item:selected { background:#1a3050; color:#fff; }
+            QListWidget::item:hover { background:#141414; }
+        """)
+        from src.controllers.manager import ControllerManager as _CM
+        for action in _CM.MAPPABLE_ACTIONS:
+            self._action_list.addItem(QListWidgetItem(action))
+        action_lo.addWidget(self._action_list)
+
+        # MIDI Learn status label
+        self._learn_status_lbl = QLabel("Select an action, then press MIDI Learn\nand move a knob/fader on your controller.")
+        self._learn_status_lbl.setStyleSheet(
+            "color:#556677; font-size:9px; background:transparent; padding:4px;"
+        )
+        self._learn_status_lbl.setWordWrap(True)
+        action_lo.addWidget(self._learn_status_lbl)
+
+        splitter.addWidget(action_frame)
+        splitter.setSizes([700, 260])
+
+        root_lo.addWidget(splitter, 1)
+
+        # Populate ports immediately
+        self._ctrl_detect_ports()
         return root
+
+    def _ctrl_manager(self):
+        """Lazy-init and cache ControllerManager."""
+        if not hasattr(self, "_controller_manager"):
+            from src.controllers.manager import ControllerManager
+            self._controller_manager = ControllerManager()
+        return self._controller_manager
+
+    # E15 – detect ports
+    @pyqtSlot()
+    def _ctrl_detect_ports(self):
+        mgr = self._ctrl_manager()
+        ports = mgr.list_available_controllers()
+        self._ctrl_port_combo.clear()
+        if ports:
+            self._ctrl_port_combo.addItems(ports)
+        else:
+            self._ctrl_port_combo.addItem("No MIDI devices found")
+        logger.info(f"Controller ports refreshed: {ports}")
+
+    # E15 – connect selected port
+    @pyqtSlot()
+    def _ctrl_connect(self):
+        port = self._ctrl_port_combo.currentText()
+        if not port or port == "No MIDI devices found":
+            return
+        mgr = self._ctrl_manager()
+        ok = mgr.connect_controller(port)
+        sb = self.statusBar()
+        if sb:
+            sb.showMessage(f"{'Connected to' if ok else 'Failed to connect:'} {port}", 4000)
+
+    # E20 – load built-in preset into table
+    @pyqtSlot()
+    def _ctrl_load_preset(self):
+        name = self._preset_combo.currentText()
+        if name.startswith("—"):
+            return
+        mgr = self._ctrl_manager()
+        mgr.load_builtin_preset(name, controller_id="default")
+        self._refresh_mapping_table("default")
+        sb = self.statusBar()
+        if sb:
+            sb.showMessage(f"Preset loaded: {name}", 3000)
+
+    # E14 – populate table from manager mappings
+    def _refresh_mapping_table(self, controller_id: str = "default"):
+        mgr = self._ctrl_manager()
+        mappings = mgr.get_mappings(controller_id)
+        self._mapping_table.setRowCount(0)
+        for cc, action in sorted(mappings.items(), key=lambda x: int(x[0])):
+            row = self._mapping_table.rowCount()
+            self._mapping_table.insertRow(row)
+            self._mapping_table.setItem(row, 0, QTableWidgetItem(str(cc)))
+            self._mapping_table.setItem(row, 1, QTableWidgetItem(action))
+            self._mapping_table.setItem(row, 2, QTableWidgetItem(controller_id))
+
+    @pyqtSlot()
+    def _ctrl_add_mapping_row(self):
+        selected_action_items = self._action_list.selectedItems()
+        if not selected_action_items:
+            QMessageBox.information(self, "Add Mapping", "Select an action from the list first.")
+            return
+        action = selected_action_items[0].text()
+        cc_str, ok = QInputDialog.getText(self, "Add Mapping", f"Enter MIDI CC number for:\n{action}")
+        if not ok or not cc_str.strip():
+            return
+        try:
+            cc = int(cc_str.strip())
+        except ValueError:
+            QMessageBox.warning(self, "Invalid CC", "CC must be an integer (0–127).")
+            return
+        mgr = self._ctrl_manager()
+        try:
+            mgr.map_control("default", cc, action)
+        except ValueError as e:
+            QMessageBox.warning(self, "Mapping Error", str(e))
+            return
+        self._refresh_mapping_table("default")
+
+    @pyqtSlot()
+    def _ctrl_remove_mapping_row(self):
+        row = self._mapping_table.currentRow()
+        if row < 0:
+            return
+        cc_item = self._mapping_table.item(row, 0)
+        ctrl_item = self._mapping_table.item(row, 2)
+        if cc_item and ctrl_item:
+            mgr = self._ctrl_manager()
+            mgr.unmap_control(ctrl_item.text(), int(cc_item.text()))
+            self._mapping_table.removeRow(row)
+
+    @pyqtSlot()
+    def _ctrl_clear_mappings(self):
+        if QMessageBox.question(self, "Clear Mappings",
+                                "Remove all mappings for this controller?") \
+                == QMessageBox.StandardButton.Yes:
+            self._ctrl_manager().clear_mappings("default")
+            self._mapping_table.setRowCount(0)
+
+    @pyqtSlot()
+    def _ctrl_save_profile(self):
+        from src.controllers.manager import _PROFILES_DIR
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Profile", _PROFILES_DIR, "JSON Profiles (*.json)")
+        if path:
+            ok = self._ctrl_manager().save_mapping_profile(path, "default")
+            sb = self.statusBar()
+            if sb:
+                sb.showMessage(f"Profile {'saved' if ok else 'FAILED'}: {path}", 4000)
+
+    @pyqtSlot()
+    def _ctrl_load_profile(self):
+        from src.controllers.manager import _PROFILES_DIR
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load Profile", _PROFILES_DIR, "JSON Profiles (*.json)")
+        if path:
+            self._ctrl_manager().load_mapping_profile(path)
+            self._refresh_mapping_table("default")
+            sb = self.statusBar()
+            if sb:
+                sb.showMessage(f"Profile loaded: {path}", 4000)
+
+    # E16 – MIDI Learn toggle
+    @pyqtSlot(bool)
+    def _ctrl_toggle_learn(self, checked: bool):
+        mgr = self._ctrl_manager()
+        if checked:
+            selected = self._action_list.selectedItems()
+            if not selected:
+                self._learn_btn.setChecked(False)
+                QMessageBox.information(self, "MIDI Learn",
+                                        "Select an action in the list first.")
+                return
+            action = selected[0].text()
+            mgr.start_learn("default", action)
+            self._learn_status_lbl.setText(
+                f"Listening…\nMove a knob/fader/button on your controller\nto map it to:\n{action}"
+            )
+        else:
+            mgr.cancel_learn()
+            self._learn_status_lbl.setText(
+                "Select an action, then press MIDI Learn\nand move a knob/fader on your controller."
+            )
 
     # ════════════════════════════════════════════════════════════════════════
     #  SETTINGS TAB
@@ -1455,6 +1974,40 @@ class VioletDJMixer(QMainWindow):
         row_lo.addWidget(nf, 1)
 
         lo.addLayout(row_lo)
+
+        # Enhancement 7 – Accent colour selector row
+        theme_frame, t_lo = _side_frame()
+        theme_frame.setObjectName("panelLeft")
+        t_lo.addWidget(_panel_title("Appearance"))
+        accent_row = QHBoxLayout()
+        accent_row.setSpacing(8)
+        accent_row.addWidget(QLabel("Accent Color:"))
+        accent_combo = _combo(list(self.ACCENT_COLORS.keys()))
+        # Restore saved accent
+        saved_name = next(
+            (k for k, v in self.ACCENT_COLORS.items() if v == self._accent_color),
+            "Amber (Default)"
+        )
+        accent_combo.setCurrentText(saved_name)
+        accent_combo.currentTextChanged.connect(self._on_accent_changed)
+        accent_row.addWidget(accent_combo)
+        accent_row.addStretch()
+        t_lo.addLayout(accent_row)
+
+        # Enhancement 10 – Save / Reset config buttons
+        cfg_row = QHBoxLayout()
+        cfg_row.setSpacing(8)
+        save_btn = QPushButton("Save Settings")
+        save_btn.clicked.connect(self._save_config)
+        reset_btn = QPushButton("Reset Defaults")
+        reset_btn.clicked.connect(self._reset_config)
+        cfg_row.addWidget(save_btn)
+        cfg_row.addWidget(reset_btn)
+        cfg_row.addStretch()
+        t_lo.addLayout(cfg_row)
+        t_lo.addStretch()
+        lo.addWidget(theme_frame)
+
         lo.addStretch()
         return root
 
@@ -1473,10 +2026,26 @@ class VioletDJMixer(QMainWindow):
         logger.info(f"Detected {count} devices")
 
     # ── File / dialog actions ────────────────────────────────────────────────
-    def open_track(self):
+    def open_track(self, deck: int = 1):
+        # Enhancement 8 – all 9 supported formats in the filter
         p, _ = QFileDialog.getOpenFileName(
-            self, "Open Track", "", "Audio Files (*.mp3 *.wav *.flac *.ogg)")
+            self, "Open Track", "",
+            "Audio Files (*.mp3 *.wav *.flac *.ogg *.aac *.m4a *.wma *.aiff *.alac);;"
+            "MP3 Files (*.mp3);;WAV Files (*.wav);;FLAC Files (*.flac);;"
+            "OGG Files (*.ogg);;AAC/M4A (*.aac *.m4a);;All Files (*)"
+        )
         if p:
+            # Enhancement 1 – record in recent tracks
+            self._add_recent_track(p)
+            # Enhancement 4 – log to session file
+            self._log_track_played(p)
+            # Enhancement 5 – update deck label
+            name = os.path.basename(p)
+            if deck in self._deck_labels:
+                self._deck_labels[deck].setText(name[:20] + "…" if len(name) > 20 else name)
+            # Enhancement 12 – add to queue list
+            if hasattr(self, "_queue_list"):
+                self._queue_list.addItem(QListWidgetItem(name))
             logger.info(f"Loading track: {p}")
 
     def open_playlist(self):
@@ -1513,3 +2082,386 @@ class VioletDJMixer(QMainWindow):
         if sb:
             sb.showMessage("Scanning for devices…")
         self.start_device_detection()
+
+    # ── Enhancement 1: Recent Tracks ────────────────────────────────────────
+    def _load_recent_tracks(self) -> list[str]:
+        path = os.path.join(os.path.expanduser("~/.violet_dj"), "recent_tracks.json")
+        try:
+            if os.path.exists(path):
+                with open(path) as f:
+                    data = json.load(f)
+                return [str(x) for x in data if os.path.exists(str(x))]
+        except Exception:
+            pass
+        return []
+
+    def _save_recent_tracks(self):
+        path = os.path.join(self._app_dir, "recent_tracks.json")
+        try:
+            with open(path, "w") as f:
+                json.dump(self._recent_tracks, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not save recent tracks: {e}")
+
+    def _add_recent_track(self, file_path: str):
+        if file_path in self._recent_tracks:
+            self._recent_tracks.remove(file_path)
+        self._recent_tracks.insert(0, file_path)
+        self._recent_tracks = self._recent_tracks[:self.MAX_RECENT]
+        self._save_recent_tracks()
+        self._rebuild_recent_menu()
+
+    def _rebuild_recent_menu(self):
+        self._recent_menu.clear()
+        if not self._recent_tracks:
+            act = QAction("(none)", self)
+            act.setEnabled(False)
+            self._recent_menu.addAction(act)
+            return
+        for path in self._recent_tracks:
+            act = QAction(os.path.basename(path), self)
+            act.setData(path)
+            act.triggered.connect(lambda checked, p=path: self._open_recent(p))
+            self._recent_menu.addAction(act)
+        self._recent_menu.addSeparator()
+        clear_act = QAction("Clear Recent", self)
+        clear_act.triggered.connect(self._clear_recent)
+        self._recent_menu.addAction(clear_act)
+
+    def _open_recent(self, path: str):
+        self._add_recent_track(path)
+        self._log_track_played(path)
+        name = os.path.basename(path)
+        if 1 in self._deck_labels:
+            self._deck_labels[1].setText(name[:20] + "…" if len(name) > 20 else name)
+        if hasattr(self, "_queue_list"):
+            self._queue_list.addItem(QListWidgetItem(name))
+        logger.info(f"Loading recent track: {path}")
+
+    def _clear_recent(self):
+        self._recent_tracks.clear()
+        self._save_recent_tracks()
+        self._rebuild_recent_menu()
+
+    # ── Enhancement 2: Keyboard Shortcuts ───────────────────────────────────
+    def _setup_keyboard_shortcuts(self):
+        shortcuts = [
+            ("Ctrl+O",     self.open_track),
+            ("F11",        self._toggle_fullscreen),
+            ("Space",      self._kb_play_pause),
+            ("Ctrl+Left",  self._kb_cue_deck_a),
+            ("Ctrl+Right", self._kb_cue_deck_b),
+            ("Ctrl+Up",    self._kb_xfader_center),
+            ("Ctrl+Down",  self._kb_xfader_center),
+            ("F5",         self.refresh_devices),
+        ]
+        for seq, slot in shortcuts:
+            sc = QShortcut(QKeySequence(seq), self)
+            sc.activated.connect(slot)
+
+    @pyqtSlot()
+    def _kb_play_pause(self):
+        logger.info("Keyboard: play/pause toggle")
+
+    @pyqtSlot()
+    def _kb_cue_deck_a(self):
+        logger.info("Keyboard: CUE deck A")
+
+    @pyqtSlot()
+    def _kb_cue_deck_b(self):
+        logger.info("Keyboard: CUE deck B")
+
+    @pyqtSlot()
+    def _kb_xfader_center(self):
+        logger.info("Keyboard: crossfader center")
+
+    def _toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    # ── Enhancement 3: Tap Tempo ─────────────────────────────────────────────
+    @pyqtSlot()
+    def _on_tap_tempo(self):
+        now = time.time()
+        # Reset if last tap was more than 3 seconds ago
+        if self._tap_times and (now - self._tap_times[-1]) > 3.0:
+            self._tap_times.clear()
+        self._tap_times.append(now)
+        if len(self._tap_times) > 8:
+            self._tap_times = self._tap_times[-8:]
+        if len(self._tap_times) >= 2:
+            intervals = [self._tap_times[i+1] - self._tap_times[i]
+                         for i in range(len(self._tap_times) - 1)]
+            avg_interval = sum(intervals) / len(intervals)
+            bpm = 60.0 / avg_interval
+            bpm = max(20.0, min(300.0, bpm))
+            ms = avg_interval * 1000
+            if self._bpm_display:
+                self._bpm_display.setText(f"{bpm:.1f}")
+            if hasattr(self, "_ms_display"):
+                self._ms_display.setText(f"{ms:.0f} ms")
+            logger.info(f"Tap tempo: {bpm:.1f} BPM")
+
+    # ── Enhancement 4: Session Logger ───────────────────────────────────────
+    def _log_track_played(self, file_path: str):
+        date_str = datetime.now().strftime("%Y%m%d")
+        log_path = os.path.join(self._app_dir, "sessions", f"session_{date_str}.log")
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "track": file_path,
+        }
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            logger.warning(f"Session log write failed: {e}")
+
+    def show_session_log(self):
+        date_str = datetime.now().strftime("%Y%m%d")
+        log_path = os.path.join(self._app_dir, "sessions", f"session_{date_str}.log")
+        if not os.path.exists(log_path):
+            QMessageBox.information(self, "Session Log", "No tracks played in this session yet.")
+            return
+        try:
+            with open(log_path) as f:
+                lines = f.readlines()
+            entries = []
+            for line in lines:
+                try:
+                    e = json.loads(line)
+                    ts = e.get("timestamp", "")[:19].replace("T", " ")
+                    name = os.path.basename(e.get("track", ""))
+                    entries.append(f"{ts}  {name}")
+                except Exception:
+                    pass
+            text = "\n".join(entries) if entries else "No entries."
+            QMessageBox.information(self, f"Session Log — {date_str}", text)
+        except Exception as e:
+            QMessageBox.warning(self, "Session Log", f"Could not read log: {e}")
+
+    # ── Enhancement 6: Master Clock / Session Timer ──────────────────────────
+    @pyqtSlot()
+    def _update_clock(self):
+        elapsed = int(time.time() - self._session_start)
+        h, rem = divmod(elapsed, 3600)
+        m, s = divmod(rem, 60)
+        now_str = datetime.now().strftime("%H:%M:%S")
+        session_str = f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+        sb = self.statusBar()
+        if sb:
+            sb.showMessage(
+                f"Violet DJ Mixer v{self.VERSION}  ·  {now_str}  ·  Session {session_str}"
+            )
+
+    # ── Enhancement 7: Accent Colour ────────────────────────────────────────
+    def _on_accent_changed(self, name: str):
+        color = self.ACCENT_COLORS.get(name, "#ff8800")
+        self._accent_color = color
+        new_style = HARDWARE_STYLESHEET.replace("#ff8800", color).replace("#ffaa22", color)
+        self.setStyleSheet(new_style)
+        self._config["accent_color"] = color
+
+    # ── Enhancement 10: Config Persistence ──────────────────────────────────
+    def _config_path(self) -> str:
+        return os.path.join(self._app_dir, "config.json")
+
+    def _load_config(self) -> dict:
+        try:
+            if os.path.exists(self._config_path()):
+                with open(self._config_path()) as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {}
+
+    def _save_config(self):
+        try:
+            with open(self._config_path(), "w") as f:
+                json.dump(self._config, f, indent=2)
+            sb = self.statusBar()
+            if sb:
+                sb.showMessage("Settings saved.", 3000)
+            logger.info("Config saved")
+        except Exception as e:
+            QMessageBox.warning(self, "Save Failed", f"Could not save settings: {e}")
+
+    def _reset_config(self):
+        self._config.clear()
+        self._accent_color = "#ff8800"
+        self.setStyleSheet(HARDWARE_STYLESHEET)
+        sb = self.statusBar()
+        if sb:
+            sb.showMessage("Settings reset to defaults.", 3000)
+
+    # ── Enhancement 2: shortcuts help dialog ────────────────────────────────
+    def show_shortcuts(self):
+        text = (
+            "<b>Keyboard Shortcuts</b><br><br>"
+            "<b>Ctrl+O</b> — Open Track<br>"
+            "<b>Space</b> — Play / Pause<br>"
+            "<b>Ctrl+Left</b> — CUE Deck A<br>"
+            "<b>Ctrl+Right</b> — CUE Deck B<br>"
+            "<b>Ctrl+Up / Down</b> — Crossfader Center<br>"
+            "<b>F5</b> — Refresh Devices<br>"
+            "<b>F11</b> — Toggle Full Screen<br>"
+        )
+        QMessageBox.information(self, "Keyboard Shortcuts", text)
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  QUEUE TAB  — Enhancement 12: Playlist Queue Management
+    # ════════════════════════════════════════════════════════════════════════
+    def create_queue_panel(self) -> QWidget:
+        root = QWidget()
+        root.setStyleSheet("background:transparent;")
+        lo = QVBoxLayout(root)
+        lo.setContentsMargins(4, 4, 4, 4)
+        lo.setSpacing(8)
+
+        panel = QFrame()
+        panel.setObjectName("panelLeft")
+        p_lo = QVBoxLayout(panel)
+        p_lo.setContentsMargins(16, 14, 16, 14)
+        p_lo.setSpacing(8)
+
+        p_lo.addWidget(_panel_title("Track Queue"))
+
+        # Queue list widget
+        self._queue_list = QListWidget()
+        self._queue_list.setStyleSheet("""
+            QListWidget {
+                background: #0d0d0d; color: #aaaaaa;
+                border: 1px solid #2a2a2a; border-radius: 4px;
+                font-size: 11px;
+            }
+            QListWidget::item:selected {
+                background: #1a3050; color: #ffffff;
+            }
+            QListWidget::item:hover {
+                background: #1a1a2a;
+            }
+        """)
+        self._queue_list.setMinimumHeight(300)
+        p_lo.addWidget(self._queue_list)
+
+        # Queue control buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        add_btn = QPushButton("+ Add Track")
+        add_btn.clicked.connect(self.open_track)
+        btn_row.addWidget(add_btn)
+
+        remove_btn = QPushButton("Remove")
+        remove_btn.clicked.connect(self._queue_remove_selected)
+        btn_row.addWidget(remove_btn)
+
+        up_btn = QPushButton("▲ Up")
+        up_btn.clicked.connect(self._queue_move_up)
+        btn_row.addWidget(up_btn)
+
+        down_btn = QPushButton("▼ Down")
+        down_btn.clicked.connect(self._queue_move_down)
+        btn_row.addWidget(down_btn)
+
+        clear_btn = QPushButton("Clear All")
+        clear_btn.clicked.connect(self._queue_list.clear)
+        btn_row.addWidget(clear_btn)
+
+        btn_row.addStretch()
+        p_lo.addLayout(btn_row)
+
+        # Now-playing indicator
+        p_lo.addWidget(_hline())
+        now_row = QHBoxLayout()
+        now_row.addWidget(_section_label("Now Playing:"))
+        self._now_playing_lbl = QLabel("—")
+        self._now_playing_lbl.setStyleSheet(
+            "color:#ff8800; font-size:11px; font-weight:bold; background:transparent;"
+        )
+        now_row.addWidget(self._now_playing_lbl)
+        now_row.addStretch()
+        p_lo.addLayout(now_row)
+
+        lo.addWidget(panel)
+        lo.addStretch()
+        return root
+
+    @pyqtSlot()
+    def _queue_remove_selected(self):
+        row = self._queue_list.currentRow()
+        if row >= 0:
+            self._queue_list.takeItem(row)
+
+    @pyqtSlot()
+    def _queue_move_up(self):
+        row = self._queue_list.currentRow()
+        if row > 0:
+            item = self._queue_list.takeItem(row)
+            self._queue_list.insertItem(row - 1, item)
+            self._queue_list.setCurrentRow(row - 1)
+
+    @pyqtSlot()
+    def _queue_move_down(self):
+        row = self._queue_list.currentRow()
+        if row >= 0 and row < self._queue_list.count() - 1:
+            item = self._queue_list.takeItem(row)
+            self._queue_list.insertItem(row + 1, item)
+            self._queue_list.setCurrentRow(row + 1)
+
+    # ════════════════════════════════════════════════════════════════════════
+    #  MIDI → UI WIRING
+    # ════════════════════════════════════════════════════════════════════════
+    def _wire_controller_actions(self):
+        """Connect ControllerManager's MidiActionEmitter signals to UI slots.
+
+        Called once after all panels are built.  Safe to call even when
+        rtmidi is unavailable — the emitter will simply never fire.
+        """
+        mgr = self._ctrl_manager()
+        if mgr.emitter is None:
+            logger.info("No MIDI emitter available — skipping MIDI→UI wiring")
+            return
+
+        mgr.emitter.action_triggered.connect(self._on_midi_action)
+        mgr.emitter.learn_completed.connect(self._on_midi_learn_completed)
+        logger.info("MIDI→UI signals connected")
+
+    @pyqtSlot(str, int)
+    def _on_midi_action(self, action: str, value: int):
+        """Route an incoming MIDI action (main thread) to the matching UI control.
+
+        `value` is 0–127 (raw MIDI); rescaled to 0–100 for sliders/dials.
+        """
+        ctrl = self._midi_controls.get(action)
+        if ctrl is None:
+            return
+
+        val_100 = int(value * 100 / 127)
+
+        if isinstance(ctrl, QSlider):
+            ctrl.setValue(val_100)
+
+        elif isinstance(ctrl, QDial):
+            ctrl.setValue(val_100)
+
+        elif isinstance(ctrl, QPushButton) and ctrl.isCheckable():
+            # Treat value > 63 as button press, ≤ 63 as release
+            ctrl.setChecked(value > 63)
+
+        logger.debug(f"MIDI action applied: {action} = {value} → {val_100}")
+
+    @pyqtSlot(str, int, str)
+    def _on_midi_learn_completed(self, controller_id: str, cc: int, action: str):
+        """Update the mapping table and status label after MIDI Learn captures a CC."""
+        self._refresh_mapping_table(controller_id)
+        self._learn_btn.setChecked(False)
+        self._learn_status_lbl.setText(
+            f"Mapped: CC {cc} → {action}\n\n"
+            "Select another action and press MIDI Learn to continue."
+        )
+        sb = self.statusBar()
+        if sb:
+            sb.showMessage(f"MIDI Learn: CC {cc} mapped to '{action}'", 5000)
+        logger.info(f"MIDI Learn UI updated: CC {cc} → {action}")
